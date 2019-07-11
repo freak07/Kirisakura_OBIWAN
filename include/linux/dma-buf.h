@@ -440,6 +440,8 @@ struct dma_buf {
 	struct list_head refs;
 	dma_buf_destructor dtor;
 	void *dtor_data;
+
+	bool from_kmem;
 };
 
 /**
