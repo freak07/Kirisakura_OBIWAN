@@ -23,6 +23,8 @@
 #include <linux/backing-dev.h>
 #endif
 
+struct kmem_cache *kmem_file_info_pool;
+
 #ifdef CONFIG_USERLAND_WORKER
 #include <linux/userland.h>
 #endif
@@ -266,7 +268,7 @@ static int sdcardfs_open(struct inode *inode, struct file *file)
 	}
 
 	file->private_data =
-		kzalloc(sizeof(struct sdcardfs_file_info), GFP_KERNEL);
+		kmem_cache_zalloc(kmem_file_info_pool, GFP_KERNEL);
 	if (!SDCARDFS_F(file)) {
 		err = -ENOMEM;
 		goto out_revert_cred;
@@ -288,7 +290,7 @@ static int sdcardfs_open(struct inode *inode, struct file *file)
 	}
 
 	if (err)
-		kfree(SDCARDFS_F(file));
+		kmem_cache_free(kmem_file_info_pool, SDCARDFS_F(file));
 	else
 		sdcardfs_copy_and_fix_attrs(inode, sdcardfs_lower_inode(inode));
 
@@ -324,7 +326,7 @@ static int sdcardfs_file_release(struct inode *inode, struct file *file)
 		fput(lower_file);
 	}
 
-	kfree(SDCARDFS_F(file));
+	kmem_cache_free(kmem_file_info_pool, SDCARDFS_F(file));
 	return 0;
 }
 
