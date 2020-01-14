@@ -460,7 +460,7 @@ struct fscrypt_mode {
 	const char *cipher_str;
 	int keysize;
 	int ivsize;
-	bool logged_impl_name;
+	int logged_impl_name;
 	bool needs_essiv;
 	bool inline_encryption;
 };
