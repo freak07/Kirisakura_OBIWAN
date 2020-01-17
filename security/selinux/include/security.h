@@ -107,6 +107,10 @@ struct selinux_state {
 	bool initialized;
 	bool policycap[__POLICYDB_CAPABILITY_MAX];
 	bool android_netlink_route;
+
+	struct page *status_page;
+	struct mutex status_lock;
+
 	struct selinux_avc *avc;
 	struct selinux_ss *ss;
 };
