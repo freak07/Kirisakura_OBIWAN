@@ -1397,7 +1397,7 @@ static ssize_t bot_vib_control_set (struct device *dev, struct device_attribute 
 	return count;
 }
 
-static ssize_t bot_vib_control_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t bot_vib_control_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
     struct dw791x_priv *dw791x=dw791x_devs[0];  //BOT_VIB
 
@@ -1414,7 +1414,19 @@ static ssize_t bot_vib_control_show(struct device *dev, struct device_attribute 
 	return snprintf(buf, PAGE_SIZE, "[VIB] status = %x\n", ret);
 }
 
-DEVICE_ATTR(bot_vib_control, (S_IWUSR|S_IRUGO), bot_vib_control_show, bot_vib_control_set);
+struct kobj_attribute bot_vib_control_attribute =
+	__ATTR(bot_vib_control, (S_IWUSR|S_IRUGO), bot_vib_control_show, bot_vib_control_set);
+
+struct attribute *attrs[] = {
+	&bot_vib_control_attribute.attr,
+	NULL,
+};
+
+static struct attribute_group attr_group = {
+	.attrs = attrs,
+};
+
+static struct kobject *android_vibrator_kobj;
 
 static int dw791x_vibrator_control_sysfs_init(void)
 {
@@ -1424,12 +1436,10 @@ static int dw791x_vibrator_control_sysfs_init(void)
 	if (android_vibrator_kobj == NULL) {
 		DbgOut((DBL_INFO, "%s:subsystem_register_failed", __func__));
 	}
-	ret = sysfs_create_file(android_vibrator_kobj, &dev_attr_bot_vib_control.attr);
-	if (ret) {
-		DbgOut((DBL_INFO, "%s: sysfs_create_file bot_vib_control failed\n", __func__));
-	}
-	else
-		DbgOut((DBL_INFO, "attribute bot_vib_control file register Done"));
+
+    ret = sysfs_create_group(android_vibrator_kobj, &attr_group);
+    if (ret)
+        pr_warn("%s: sysfs_create_group failed\n", __func__);
 	
 	return 0;
 }
