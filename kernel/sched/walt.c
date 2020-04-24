@@ -3708,6 +3708,40 @@ unlock:
 	return ret;
 }
 
+extern int  asus_current_fps;           //from drm_atomic_helper.c
+
+void sched_set_refresh_rate_walt()
+{
+	if (HZ == 250 && sysctl_sched_dynamic_ravg_window_enable) {
+		if (asus_current_fps >= 60 && asus_current_fps < 90)
+		{
+			pr_err("[WALT] set 60fps WALT RAVG_Window\n");
+			display_sched_ravg_window_nr_ticks = 5;
+		}
+		else if (asus_current_fps >= 90 && asus_current_fps < 120)
+		{
+			pr_err("[WALT] set 90fps WALT RAVG_Window\n");
+			display_sched_ravg_window_nr_ticks = 3;
+		}
+		else if (asus_current_fps == 120)
+		{
+			pr_err("[WALT] set 120fps WALT RAVG_Window\n");
+			display_sched_ravg_window_nr_ticks = 2;
+		}
+		else if (asus_current_fps == 144)
+		{
+			pr_err("[WALT] set 144fps WALT RAVG_Window\n");
+			display_sched_ravg_window_nr_ticks = 1;
+		}
+		else if (asus_current_fps == 160)
+		{
+			pr_err("[WALT] set 160fps WALT RAVG_Window\n");
+			display_sched_ravg_window_nr_ticks = 1;
+		}
+		sched_window_nr_ticks_change();
+	}
+}
+
 void sched_set_refresh_rate(enum fps fps)
 {
 	if (HZ == 250 && sysctl_sched_dynamic_ravg_window_enable) {

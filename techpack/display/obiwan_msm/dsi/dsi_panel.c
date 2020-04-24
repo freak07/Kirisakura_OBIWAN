@@ -4729,6 +4729,8 @@ error:
 	return rc;
 }
 
+void sched_set_refresh_rate_walt(void);
+
 /*
  * ASUS ROG3 display protocol panel functions
  */
@@ -4759,15 +4761,35 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 	mutex_lock(&panel->panel_lock);
 
 	if (type == 2)
+		{
 		cmd_type = DSI_CMD_SET_60;
+			pr_err("[WALT-Disp] set 60fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
 	else if (type == 1)
+		{
 		cmd_type = DSI_CMD_SET_90;
+			pr_err("[WALT-Disp] set 90fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
 	else if (type == 0)
+		{
 		cmd_type = DSI_CMD_SET_120;
+			pr_err("[WALT-Disp] set 120fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
 	else if (type == 3)
+		{
 		cmd_type = DSI_CMD_SET_144;
+			pr_err("[WALT-Disp] set 144fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
 	else if (type == 4)
+		{
 		cmd_type = DSI_CMD_SET_160;
+			pr_err("[WALT-Disp] set 144fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
 
 	rc = dsi_panel_tx_cmd_set(panel, cmd_type);
 	if (rc) {
