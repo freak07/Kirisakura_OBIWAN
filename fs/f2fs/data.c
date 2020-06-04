@@ -737,6 +737,7 @@ int f2fs_submit_page_bio(struct f2fs_io_info *fio)
 		__f2fs_submit_read_bio(fio->sbi, bio, fio->type);
 	else
 		__submit_bio(fio->sbi, bio, fio->type);
+	__attach_io_flag(fio);
 	return 0;
 }
 
@@ -930,6 +931,7 @@ int f2fs_merge_page_bio(struct f2fs_io_info *fio)
 alloc_new:
 	if (!bio) {
 		bio = __bio_alloc(fio, BIO_MAX_PAGES);
+		__attach_io_flag(fio);
 		bio_set_op_attrs(bio, fio->op, fio->op_flags);
 		if (bio_encrypted)
 			fscrypt_set_ice_dun(inode, bio, dun);
