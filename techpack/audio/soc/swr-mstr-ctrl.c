@@ -56,6 +56,8 @@
 #define SWRM_COL_02    02
 #define SWRM_COL_16    16
 
+#define SWR_OVERFLOW_RETRY_COUNT 30
+
 /* pm runtime auto suspend timer in msecs */
 static int auto_suspend_timer = SWR_AUTO_SUSPEND_DELAY * 1000;
 module_param(auto_suspend_timer, int, 0664);
@@ -770,7 +772,8 @@ static void swrm_wait_for_fifo_avail(struct swr_mstr_ctrl *swrm, int swrm_rd_wr)
 			}
 		}
 		if (fifo_outstanding_cmd == 0)
-			pr_err("%s err read underflow\n", __func__);
+			dev_err_ratelimited(swrm->dev,
+				"%s err read underflow\n", __func__);
 	} else {
 		/* Check for fifo overflow during write */
 		/* Check no of outstanding commands in fifo before write */
@@ -779,7 +782,7 @@ static void swrm_wait_for_fifo_avail(struct swr_mstr_ctrl *swrm, int swrm_rd_wr)
 					 >> 8);
 		if (fifo_outstanding_cmd == swrm->wr_fifo_depth) {
 			while (fifo_retry_count) {
-				usleep_range(50, 55);
+				usleep_range(500, 510);
 				fifo_outstanding_cmd =
 				((swr_master_read(swrm, SWRM_CMD_FIFO_STATUS)
 				  & 0x00001F00) >> 8);
@@ -789,7 +792,8 @@ static void swrm_wait_for_fifo_avail(struct swr_mstr_ctrl *swrm, int swrm_rd_wr)
 			}
 		}
 		if (fifo_outstanding_cmd == swrm->wr_fifo_depth)
-			pr_err("%s err write overflow\n", __func__);
+			dev_err_ratelimited(swrm->dev,
+				"%s err write overflow\n", __func__);
 	}
 }
 
