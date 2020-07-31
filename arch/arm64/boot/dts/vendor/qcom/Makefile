@@ -1,6 +1,6 @@
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 
-ifneq (,$(filter ZS670KS,$(ASUS_BUILD_PROJECT)))
+ifdef CONFIG_MACH_ASUS_ZS670KS
 		dtbo-$(CONFIG_ARCH_KONA) += \
 				kona-mtp-overlay.dtbo \
                 zs670ks-evb-asus-overlay.dtbo \
@@ -23,7 +23,7 @@ zs670ks-pr-asus-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
 zs670ks-mp-asus-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
 else
 
-ifneq (,$(filter ZS661KS,$(ASUS_BUILD_PROJECT)))
+ifdef CONFIG_MACH_ASUS_ZS661KS
 
         dtbo-$(CONFIG_ARCH_KONA) += \
                 ZS661KS-EVB-overlay.dtbo \

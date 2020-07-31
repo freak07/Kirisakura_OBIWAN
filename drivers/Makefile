@@ -64,7 +64,7 @@ obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
 obj-y				+= gpu/
 
 #Zen7 camera moto driver.
-ifeq ($(ASUS_BUILD_PROJECT),ZS670KS)
+ifdef CONFIG_MACH_ASUS_ZS670KS
 obj-y				+= msp/
 endif
 
@@ -201,12 +201,12 @@ obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 obj-$(CONFIG_TSPDRV_AW8697)	+= motor/tspdrv_aw8697/
 
 # ASUS_BSP: AURA SYNC driver
-ifeq ($(ASUS_BUILD_PROJECT),ZS661KS)
+ifdef CONFIG_MACH_ASUS_ZS661KS
 obj-y				+= aura_sync/
 endif
 
 #Tuxera
-ifeq ($(ASUS_BUILD_PROJECT),ZS661KS)
+ifdef CONFIG_MACH_ASUS_ZS661KS
 	ifeq ($(CONFIG_TUXERA_USERDEBUG),y)
 		obj-y				+= tuxera/zs661ks/exfat/userdebug/
 		obj-y				+= tuxera/zs661ks/ntfs/userdebug/
@@ -216,7 +216,7 @@ ifeq ($(ASUS_BUILD_PROJECT),ZS661KS)
 	endif
 endif
 
-ifeq ($(ASUS_BUILD_PROJECT),ZS661KS)
+ifdef CONFIG_MACH_ASUS_ZS661KS
 obj-y				+= ec_hid_driver/
 obj-y				+= gamepad_hid_driver/
 obj-y				+= dt_power/
