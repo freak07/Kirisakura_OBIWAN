@@ -692,7 +692,7 @@ ifeq ($(call shell-cached,$(CONFIG_SHELL) $(srctree)/scripts/gcc-goto.sh $(CC) $
 	KBUILD_AFLAGS += -DCC_HAVE_ASM_GOTO
 endif
 
-KBUILD_CPPFLAGS += -DASUS_SW_VER=\"lineage\"
+KBUILD_CPPFLAGS += -DASUS_SW_VER=\"Kirisakura\"
 
 include scripts/Makefile.kcov
 include scripts/Makefile.gcc-plugins
