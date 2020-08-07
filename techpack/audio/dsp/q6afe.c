@@ -9571,11 +9571,8 @@ int __init afe_init(void)
 	this_afe.uevent_data = kzalloc(sizeof(*(this_afe.uevent_data)), GFP_KERNEL);
 	if (!this_afe.uevent_data)
 		return -ENOMEM;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110))
-	wl.ws = wakeup_source_register(NULL, "spkr-prot")
-#else
+
 	wl.ws = wakeup_source_register("spkr-prot");
-#endif
 /*
 	 * Set release function to cleanup memory related to kobject
 	 * before initializing the kobject.

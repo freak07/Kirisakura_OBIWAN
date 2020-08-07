@@ -2370,11 +2370,8 @@ static int usf_open(struct inode *inode, struct file *file)
 	usf = kzalloc(sizeof(struct usf_type), GFP_KERNEL);
 	if (usf == NULL)
 		return -ENOMEM;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110))
-	usf_wakeup_source = wakeup_source_register(NULL, "usf");
-#else
+
 	usf_wakeup_source = wakeup_source_register("usf");
-#endif
 
 	file->private_data = usf;
 	usf->dev_ind = dev_ind;
