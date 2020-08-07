@@ -2252,10 +2252,6 @@ err_resp:
 				goto exit;
 			}
 
-			ret = qseecom_dmabuf_cache_operations(ptr_svc->dmabuf,
-						QSEECOM_CACHE_INVALIDATE);
-			if (ret)
-				goto exit;
 		} else {
 			ret = qseecom_scm_call(SCM_SVC_TZSCHEDULER, 1,
 					cmd_buf, cmd_len, resp, sizeof(*resp));
@@ -2587,10 +2583,6 @@ err_resp:
 					ret, data->client.app_id);
 				goto exit;
 			}
-			ret = qseecom_dmabuf_cache_operations(ptr_svc->dmabuf,
-						QSEECOM_CACHE_INVALIDATE);
-			if (ret)
-				goto exit;
 		} else {
 			ret = qseecom_scm_call(SCM_SVC_TZSCHEDULER, 1,
 					cmd_buf, cmd_len, resp, sizeof(*resp));
@@ -3761,14 +3753,6 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 					ret, data->client.app_id);
 		goto exit;
 	}
-	if (data->client.dmabuf) {
-		ret = qseecom_dmabuf_cache_operations(data->client.dmabuf,
-					QSEECOM_CACHE_INVALIDATE);
-		if (ret) {
-			pr_err("cache operation failed %d\n", ret);
-			goto exit;
-		}
-	}
 
 	if (qseecom.qsee_reentrancy_support) {
 		ret = __qseecom_process_reentrancy(&resp, ptr_app, data);
@@ -3789,6 +3773,15 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 				ret = -EINVAL;
 				goto exit;
 			}
+		}
+	}
+
+	if (data->client.dmabuf) {
+		ret = qseecom_dmabuf_cache_operations(data->client.dmabuf,
+					QSEECOM_CACHE_INVALIDATE);
+		if (ret) {
+			pr_err("cache operation failed %d\n", ret);
+			goto exit;
 		}
 	}
 exit:
@@ -9298,6 +9291,15 @@ static int qseecom_init_dev(struct platform_device *pdev)
 		goto exit_del_cdev;
 	}
 
+	if (!qseecom.dev->dma_parms) {
+		qseecom.dev->dma_parms =
+			kzalloc(sizeof(*qseecom.dev->dma_parms), GFP_KERNEL);
+		if (!qseecom.dev->dma_parms) {
+			rc = -ENOMEM;
+			goto exit_del_cdev;
+		}
+	}
+	dma_set_max_seg_size(qseecom.dev, DMA_BIT_MASK(32));
 	return 0;
 
 exit_del_cdev:
@@ -9314,6 +9316,8 @@ exit_unreg_chrdev_region:
 
 static void qseecom_deinit_dev(void)
 {
+	kfree(qseecom.dev->dma_parms);
+	qseecom.dev->dma_parms = NULL;
 	cdev_del(&qseecom.cdev);
 	device_destroy(qseecom.driver_class, qseecom.qseecom_device_no);
 	class_destroy(qseecom.driver_class);
