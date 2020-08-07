@@ -2529,11 +2529,8 @@ static int msm_lsm_open(struct snd_pcm_substream *substream)
 	prtd->lsm_client->event_type = LSM_DET_EVENT_TYPE_LEGACY;
 	prtd->lsm_client->fe_id = rtd->dai_link->id;
 	prtd->lsm_client->unprocessed_data = 0;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 110))
-	prtd->ws = wakeup_source_register(rtd->dev, "lsm-client");
-#else
 	prtd->ws = wakeup_source_register("lsm-client");
-#endif
+
 	return 0;
 }
 
