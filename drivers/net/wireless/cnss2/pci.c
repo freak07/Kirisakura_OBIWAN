@@ -12,7 +12,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/memblock.h>
 #include <linux/completion.h>
-#include <soc/qcom/ramdump.h>
 
 #include "main.h"
 #include "bus.h"
@@ -460,27 +459,22 @@ static int cnss_pci_reg_write(struct cnss_pci_data *pci_priv, u32 offset,
 static int cnss_pci_force_wake_get(struct cnss_pci_data *pci_priv)
 {
 	struct device *dev = &pci_priv->pci_dev->dev;
-	u32 timeout = 0;
 	int ret;
 
-	ret = cnss_pci_force_wake_request(dev);
+	ret = cnss_pci_force_wake_request_sync(dev,
+					       FORCE_WAKE_DELAY_TIMEOUT_US);
 	if (ret) {
 		if (ret != -EAGAIN)
 			cnss_pr_err("Failed to request force wake\n");
 		return ret;
 	}
 
-	while (!cnss_pci_is_device_awake(dev) &&
-	       timeout <= FORCE_WAKE_DELAY_TIMEOUT_US) {
-		usleep_range(FORCE_WAKE_DELAY_MIN_US, FORCE_WAKE_DELAY_MAX_US);
-		timeout += FORCE_WAKE_DELAY_MAX_US;
-	}
-
-	if (cnss_pci_is_device_awake(dev) != true) {
-		cnss_pr_err("Timed out to request force wake\n");
-		cnss_pci_force_wake_release(dev);
-		return -ETIMEDOUT;
-	}
+	/* If device's M1 state-change event races here, it can be ignored,
+	 * as the device is expected to immediately move from M2 to M0
+	 * without entering low power state.
+	 */
+	if (cnss_pci_is_device_awake(dev) != true)
+		cnss_pr_warn("MHI not in M0, while reg still accessible\n");
 
 	return 0;
 }
@@ -2201,6 +2195,7 @@ int cnss_pci_unregister_driver_hdlr(struct cnss_pci_data *pci_priv)
 static bool cnss_pci_is_drv_supported(struct cnss_pci_data *pci_priv)
 {
 	struct pci_dev *root_port = pci_find_pcie_root_port(pci_priv->pci_dev);
+	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 	struct device_node *root_of_node;
 	bool drv_supported = false;
 
@@ -2217,6 +2212,9 @@ static bool cnss_pci_is_drv_supported(struct cnss_pci_data *pci_priv)
 
 	cnss_pr_dbg("PCIe DRV is %s\n",
 		    drv_supported ? "supported" : "not supported");
+
+	if (drv_supported)
+		plat_priv->cap.cap_flag |= CNSS_HAS_DRV_SUPPORT;
 
 	return drv_supported;
 }
@@ -2694,9 +2692,6 @@ int cnss_pci_pm_request_resume(struct cnss_pci_data *pci_priv)
 
 	dev = &pci_priv->pci_dev->dev;
 
-	if (!pm_runtime_enabled(dev))
-		return 0;
-
 	status = dev->power.runtime_status;
 	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
 		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
@@ -2714,9 +2709,6 @@ int cnss_pci_pm_runtime_resume(struct cnss_pci_data *pci_priv)
 		return -ENODEV;
 
 	dev = &pci_priv->pci_dev->dev;
-
-	if (!pm_runtime_enabled(dev))
-		return 0;
 
 	status = dev->power.runtime_status;
 	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
@@ -2736,9 +2728,6 @@ int cnss_pci_pm_runtime_get(struct cnss_pci_data *pci_priv)
 
 	dev = &pci_priv->pci_dev->dev;
 
-	if (!pm_runtime_enabled(dev))
-		return 0;
-
 	status = dev->power.runtime_status;
 	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
 		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
@@ -2757,9 +2746,6 @@ int cnss_pci_pm_runtime_get_sync(struct cnss_pci_data *pci_priv)
 
 	dev = &pci_priv->pci_dev->dev;
 
-	if (!pm_runtime_enabled(dev))
-		return 0;
-
 	status = dev->power.runtime_status;
 	if (status == RPM_SUSPENDING || status == RPM_SUSPENDED)
 		cnss_pr_vdbg("Runtime PM resume is requested by %ps\n",
@@ -2773,9 +2759,6 @@ void cnss_pci_pm_runtime_get_noresume(struct cnss_pci_data *pci_priv)
 	if (!pci_priv)
 		return;
 
-	if (!pm_runtime_enabled(&pci_priv->pci_dev->dev))
-		return;
-
 	pm_runtime_get_noresume(&pci_priv->pci_dev->dev);
 }
 
@@ -2787,9 +2770,6 @@ int cnss_pci_pm_runtime_put_autosuspend(struct cnss_pci_data *pci_priv)
 		return -ENODEV;
 
 	dev = &pci_priv->pci_dev->dev;
-
-	if (!pm_runtime_enabled(dev))
-		return 0;
 
 	if (atomic_read(&dev->power.usage_count) == 0) {
 		cnss_pr_dbg("Ignore excessive runtime PM put operation\n");
@@ -2807,9 +2787,6 @@ void cnss_pci_pm_runtime_put_noidle(struct cnss_pci_data *pci_priv)
 		return;
 
 	dev = &pci_priv->pci_dev->dev;
-
-	if (!pm_runtime_enabled(dev))
-		return;
 
 	if (atomic_read(&dev->power.usage_count) == 0) {
 		cnss_pr_dbg("Ignore excessive runtime PM put operation\n");
@@ -2894,6 +2871,35 @@ int cnss_auto_resume(struct device *dev)
 	return 0;
 }
 EXPORT_SYMBOL(cnss_auto_resume);
+
+int cnss_pci_force_wake_request_sync(struct device *dev, int timeout_us)
+{
+	struct pci_dev *pci_dev = to_pci_dev(dev);
+	struct cnss_pci_data *pci_priv = cnss_get_pci_priv(pci_dev);
+	struct cnss_plat_data *plat_priv;
+	struct mhi_controller *mhi_ctrl;
+
+	if (!pci_priv)
+		return -ENODEV;
+
+	if (pci_priv->device_id != QCA6390_DEVICE_ID &&
+	    pci_priv->device_id != QCA6490_DEVICE_ID)
+		return 0;
+
+	mhi_ctrl = pci_priv->mhi_ctrl;
+	if (!mhi_ctrl)
+		return -EINVAL;
+
+	plat_priv = pci_priv->plat_priv;
+	if (!plat_priv)
+		return -ENODEV;
+
+	if (test_bit(CNSS_DEV_ERR_NOTIFY, &plat_priv->driver_state))
+		return -EAGAIN;
+
+	return mhi_device_get_sync_atomic(mhi_ctrl->mhi_dev, timeout_us);
+}
+EXPORT_SYMBOL(cnss_pci_force_wake_request_sync);
 
 int cnss_pci_force_wake_request(struct device *dev)
 {
@@ -4049,6 +4055,14 @@ void cnss_pci_clear_dump_info(struct cnss_pci_data *pci_priv)
 	plat_priv->ramdump_info_v2.dump_data_valid = false;
 }
 
+void cnss_pci_device_crashed(struct cnss_pci_data *pci_priv)
+{
+	if (!pci_priv)
+		return;
+
+	cnss_device_crashed(&pci_priv->pci_dev->dev);
+}
+
 static int cnss_mhi_pm_runtime_get(struct mhi_controller *mhi_ctrl, void *priv)
 {
 	struct cnss_pci_data *pci_priv = priv;
@@ -4272,8 +4286,10 @@ static int cnss_pci_register_mhi(struct cnss_pci_data *pci_priv)
 	mhi_ctrl->fw_image = plat_priv->firmware_name;
 
 	mhi_ctrl->regs = pci_priv->bar;
-	cnss_pr_dbg("BAR starts at %pa\n",
-		    &pci_resource_start(pci_priv->pci_dev, PCI_BAR_NUM));
+	mhi_ctrl->len = pci_resource_len(pci_priv->pci_dev, PCI_BAR_NUM);
+	cnss_pr_dbg("BAR starts at %pa, len-%x\n",
+		    &pci_resource_start(pci_priv->pci_dev, PCI_BAR_NUM),
+		    mhi_ctrl->len);
 
 	ret = cnss_pci_get_mhi_msi(pci_priv);
 	if (ret) {
@@ -4300,6 +4316,7 @@ static int cnss_pci_register_mhi(struct cnss_pci_data *pci_priv)
 	mhi_ctrl->sbl_size = SZ_512K;
 	mhi_ctrl->seg_len = SZ_512K;
 	mhi_ctrl->fbc_download = true;
+	mhi_ctrl->rddm_supported = true;
 
 	mhi_ctrl->log_buf = ipc_log_context_create(CNSS_IPC_LOG_PAGES,
 						   "cnss-mhi", 0);
@@ -4401,8 +4418,6 @@ static int cnss_pci_probe(struct pci_dev *pci_dev,
 	cnss_set_pci_priv(pci_dev, pci_priv);
 	plat_priv->device_id = pci_dev->device;
 	plat_priv->bus_priv = pci_priv;
-	snprintf(plat_priv->firmware_name, sizeof(plat_priv->firmware_name),
-		 DEFAULT_FW_FILE_NAME);
 	mutex_init(&pci_priv->bus_lock);
 
 	ret = of_reserved_mem_device_init(dev);
@@ -4546,11 +4561,10 @@ static const struct pci_device_id cnss_pci_id_table[] = {
 };
 MODULE_DEVICE_TABLE(pci, cnss_pci_id_table);
 
-
 static const struct dev_pm_ops cnss_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(cnss_pci_suspend, cnss_pci_resume)
 	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(cnss_pci_suspend_noirq,
-        			      cnss_pci_resume_noirq)
+				      cnss_pci_resume_noirq)
 	SET_RUNTIME_PM_OPS(cnss_pci_runtime_suspend, cnss_pci_runtime_resume,
 			   cnss_pci_runtime_idle)
 };

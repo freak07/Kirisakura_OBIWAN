@@ -7712,8 +7712,27 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 
 	/* Bail out if no candidate was found. */
 	weight = cpumask_weight(candidates);
-	if (!weight)
+	if (!weight) {
+		/*
+		 * Don't overload the previous CPU if it had already
+		 * more runnable tasks. Fallback to a CPU with lower
+		 * number of tasks.
+		 */
+		if (cpu_rq(prev_cpu)->nr_running > 32) {
+			int i;
+			unsigned int best_nr = UINT_MAX;
+
+			for_each_cpu(i, cpu_active_mask) {
+				if (!cpumask_test_cpu(i, &p->cpus_allowed))
+					continue;
+				if (cpu_rq(i)->nr_running < best_nr) {
+					best_nr = cpu_rq(i)->nr_running;
+					best_energy_cpu = i;
+				}
+			}
+		}
 		goto unlock;
+	}
 
 	/* If there is only one sensible candidate, select it now. */
 	cpu = cpumask_first(candidates);
@@ -8774,17 +8793,21 @@ static int detach_tasks(struct lb_env *env)
 	unsigned long load = 0;
 	int detached = 0;
 	int orig_loop = env->loop;
+	u64 start_t = rq_clock(env->src_rq);
 
 	lockdep_assert_held(&env->src_rq->lock);
 
 	if (env->imbalance <= 0)
 		return 0;
 
-	if (!same_cluster(env->dst_cpu, env->src_cpu))
-		env->flags |= LBF_IGNORE_PREFERRED_CLUSTER_TASKS;
+	if (env->src_rq->nr_running < 32) {
+		if (!same_cluster(env->dst_cpu, env->src_cpu))
+			env->flags |= LBF_IGNORE_PREFERRED_CLUSTER_TASKS;
 
-	if (capacity_orig_of(env->dst_cpu) < capacity_orig_of(env->src_cpu))
-		env->flags |= LBF_IGNORE_BIG_TASKS;
+		if (capacity_orig_of(env->dst_cpu) <
+				capacity_orig_of(env->src_cpu))
+			env->flags |= LBF_IGNORE_BIG_TASKS;
+	}
 
 redo:
 	while (!list_empty(tasks)) {
@@ -8800,6 +8823,10 @@ redo:
 		env->loop++;
 		/* We've more or less seen every task there is, call it quits */
 		if (env->loop > env->loop_max)
+			break;
+
+		/* Abort the loop, if we spent more than 5 msec */
+		if (rq_clock(env->src_rq) - start_t > 5000000)
 			break;
 
 		/* take a breather every nr_migrate tasks */
@@ -9624,10 +9651,19 @@ static bool update_sd_pick_busiest(struct lb_env *env,
 	if (sgs->group_type < busiest->group_type)
 		return false;
 
-	if (env->prefer_spread && env->idle != CPU_NOT_IDLE &&
-		(sgs->sum_nr_running > busiest->sum_nr_running) &&
-		(sgs->group_util > busiest->group_util))
-		return true;
+	/*
+	 * This sg and busiest are classified as same. when prefer_spread
+	 * is true, we want to maximize the chance of pulling taks, so
+	 * prefer to pick sg with more runnable tasks and break the ties
+	 * with utilization.
+	 */
+	if (env->prefer_spread) {
+		if (sgs->sum_nr_running < busiest->sum_nr_running)
+			return false;
+		if (sgs->sum_nr_running > busiest->sum_nr_running)
+			return true;
+		return sgs->group_util > busiest->group_util;
+	}
 
 	if (sgs->avg_load <= busiest->avg_load)
 		return false;
@@ -9662,10 +9698,6 @@ static bool update_sd_pick_busiest(struct lb_env *env,
 		return false;
 
 asym_packing:
-
-	if (env->prefer_spread &&
-		(sgs->sum_nr_running < busiest->sum_nr_running))
-		return false;
 
 	/* This is the busiest node in its class. */
 	if (!(env->sd->flags & SD_ASYM_PACKING))
@@ -10137,15 +10169,6 @@ static inline void calculate_imbalance(struct lb_env *env, struct sd_lb_stats *s
 
 		return fix_small_imbalance(env, sds);
 	}
-
-	/*
-	 * If we couldn't find any imbalance, then boost the imbalance
-	 * with the group util.
-	 */
-	if (env->prefer_spread && !env->imbalance &&
-		env->idle != CPU_NOT_IDLE &&
-		busiest->sum_nr_running > busiest->group_weight)
-		env->imbalance = busiest->group_util;
 }
 
 /******* find_busiest_group() helpers end here *********************/
@@ -10181,7 +10204,7 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 			int cpu_local, cpu_busiest;
 			unsigned long capacity_local, capacity_busiest;
 
-			if (env->idle != CPU_NEWLY_IDLE)
+			if (env->idle != CPU_NEWLY_IDLE && !env->prefer_spread)
 				goto out_balanced;
 
 			if (!sds.local || !sds.busiest)
@@ -10230,9 +10253,13 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	/*
 	 * When dst_cpu is idle, prevent SMP nice and/or asymmetric group
 	 * capacities from resulting in underutilization due to avg_load.
+	 *
+	 * When prefer_spread is enabled, force the balance even when
+	 * busiest group has some capacity but loaded with more than 1
+	 * task.
 	 */
 	if (env->idle != CPU_NOT_IDLE && group_has_capacity(env, local) &&
-	    busiest->group_no_capacity)
+	    (busiest->group_no_capacity || env->prefer_spread))
 		goto force_balance;
 
 	/* Misfit tasks should be dealt with regardless of the avg load */
@@ -10278,6 +10305,14 @@ force_balance:
 	/* Looks like there is an imbalance. Compute it */
 	env->src_grp_type = busiest->group_type;
 	calculate_imbalance(env, &sds);
+
+	/*
+	 * If we couldn't find any imbalance, then boost the imbalance
+	 * based on the group util.
+	 */
+	if (!env->imbalance && env->prefer_spread)
+		env->imbalance = (busiest->group_util >> 1);
+
 	trace_sched_load_balance_stats(sds.busiest->cpumask[0],
 				busiest->group_type, busiest->avg_load,
 				busiest->load_per_task,	sds.local->cpumask[0],
@@ -10387,7 +10422,7 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 		 * to: wl_i * capacity_j > wl_j * capacity_i;  where j is
 		 * our previous maximum.
 		 */
-		if (wl * busiest_capacity > busiest_load * capacity) {
+		if (wl * busiest_capacity >= busiest_load * capacity) {
 			busiest_load = wl;
 			busiest_capacity = capacity;
 			busiest = rq;
@@ -10533,7 +10568,8 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 		.loop		= 0,
 	};
 
-	env.prefer_spread = (prefer_spread_on_idle(this_cpu) &&
+	env.prefer_spread = (idle != CPU_NOT_IDLE &&
+				prefer_spread_on_idle(this_cpu) &&
 				!((sd->flags & SD_ASYM_CPUCAPACITY) &&
 				 !cpumask_test_cpu(this_cpu,
 						 &asym_cap_sibling_cpus)));

@@ -101,8 +101,9 @@ static struct mhi_pm_transitions const mhi_state_transitions[] = {
 	},
 	{
 		MHI_PM_SYS_ERR_DETECT,
-		MHI_PM_SYS_ERR_PROCESS | MHI_PM_SHUTDOWN_PROCESS |
-		MHI_PM_LD_ERR_FATAL_DETECT | MHI_PM_SHUTDOWN_NO_ACCESS
+		MHI_PM_DEVICE_ERR_DETECT | MHI_PM_SYS_ERR_PROCESS |
+		MHI_PM_SHUTDOWN_PROCESS | MHI_PM_LD_ERR_FATAL_DETECT |
+		MHI_PM_SHUTDOWN_NO_ACCESS
 	},
 	{
 		MHI_PM_SYS_ERR_PROCESS,
@@ -405,35 +406,42 @@ void mhi_pm_m1_transition(struct mhi_controller *mhi_cntrl)
 	enum MHI_PM_STATE state;
 
 	write_lock_irq(&mhi_cntrl->pm_lock);
+	/* Just check if we are racing with device_wake assertion */
+	if (atomic_read(&mhi_cntrl->dev_wake))
+		MHI_VERB("M2 transition request post dev_wake:%d\n",
+			 atomic_read(&mhi_cntrl->dev_wake));
+
 	/* if it fails, means we transition to M3 */
 	state = mhi_tryset_pm_state(mhi_cntrl, MHI_PM_M2);
-	if (state == MHI_PM_M2) {
-		MHI_VERB("Entered M2 State\n");
-		mhi_set_mhi_state(mhi_cntrl, MHI_STATE_M2);
-		mhi_cntrl->dev_state = MHI_STATE_M2;
-		mhi_cntrl->M2++;
-
+	if (state != MHI_PM_M2) {
+		/* Nothing to be done, handle M3 transition later */
 		write_unlock_irq(&mhi_cntrl->pm_lock);
-		wake_up_all(&mhi_cntrl->state_event);
-
-		/* transfer pending, exit M2 immediately */
-		if (unlikely(atomic_read(&mhi_cntrl->pending_pkts) ||
-			     atomic_read(&mhi_cntrl->dev_wake))) {
-			MHI_VERB(
-				 "Exiting M2 Immediately, pending_pkts:%d dev_wake:%d\n",
-				 atomic_read(&mhi_cntrl->pending_pkts),
-				 atomic_read(&mhi_cntrl->dev_wake));
-			read_lock_bh(&mhi_cntrl->pm_lock);
-			mhi_cntrl->wake_get(mhi_cntrl, true);
-			mhi_cntrl->wake_put(mhi_cntrl, true);
-			read_unlock_bh(&mhi_cntrl->pm_lock);
-		} else {
-			mhi_cntrl->status_cb(mhi_cntrl, mhi_cntrl->priv_data,
-					     MHI_CB_IDLE);
-		}
-	} else {
-		write_unlock_irq(&mhi_cntrl->pm_lock);
+		return;
 	}
+
+	MHI_VERB("Entered M2 State\n");
+	mhi_set_mhi_state(mhi_cntrl, MHI_STATE_M2);
+	mhi_cntrl->dev_state = MHI_STATE_M2;
+	mhi_cntrl->M2++;
+
+	write_unlock_irq(&mhi_cntrl->pm_lock);
+	wake_up_all(&mhi_cntrl->state_event);
+
+	/* transfer pending, exit M2 immediately */
+	if (unlikely(atomic_read(&mhi_cntrl->pending_pkts) ||
+		     atomic_read(&mhi_cntrl->dev_wake))) {
+		MHI_VERB(
+			 "Exiting M2 Immediately, pending_pkts:%d dev_wake:%d\n",
+			 atomic_read(&mhi_cntrl->pending_pkts),
+			 atomic_read(&mhi_cntrl->dev_wake));
+		read_lock_bh(&mhi_cntrl->pm_lock);
+		mhi_cntrl->wake_get(mhi_cntrl, true);
+		mhi_cntrl->wake_put(mhi_cntrl, true);
+		read_unlock_bh(&mhi_cntrl->pm_lock);
+		return;
+	}
+
+	mhi_cntrl->status_cb(mhi_cntrl, mhi_cntrl->priv_data, MHI_CB_IDLE);
 }
 
 int mhi_pm_m3_transition(struct mhi_controller *mhi_cntrl)
@@ -778,7 +786,7 @@ int mhi_queue_disable_transition(struct mhi_controller *mhi_cntrl,
 	list_add_tail(&item->node, &mhi_cntrl->transition_list);
 	spin_unlock_irqrestore(&mhi_cntrl->transition_lock, flags);
 
-	schedule_work(&mhi_cntrl->st_worker);
+	queue_work(mhi_cntrl->wq, &mhi_cntrl->st_worker);
 
 	return 0;
 }
@@ -798,7 +806,7 @@ int mhi_queue_state_transition(struct mhi_controller *mhi_cntrl,
 	list_add_tail(&item->node, &mhi_cntrl->transition_list);
 	spin_unlock_irqrestore(&mhi_cntrl->transition_lock, flags);
 
-	schedule_work(&mhi_cntrl->st_worker);
+	queue_work(mhi_cntrl->wq, &mhi_cntrl->st_worker);
 
 	return 0;
 }
@@ -814,8 +822,7 @@ static void mhi_special_events_pending(struct mhi_controller *mhi_cntrl)
 
 		spin_lock_bh(&mhi_event->lock);
 		if (ev_ring->rp != mhi_to_virtual(ev_ring, er_ctxt->rp)) {
-			queue_work(mhi_cntrl->special_wq,
-				   &mhi_cntrl->special_work);
+			queue_work(mhi_cntrl->wq, &mhi_cntrl->special_work);
 			spin_unlock_bh(&mhi_event->lock);
 			break;
 		}
@@ -849,7 +856,7 @@ void mhi_process_sys_err(struct mhi_controller *mhi_cntrl)
 	 * if controller supports rddm, we do not process sys error state,
 	 * instead we will jump directly to rddm state
 	 */
-	if (mhi_cntrl->rddm_image) {
+	if (mhi_cntrl->rddm_supported) {
 		MHI_CNTRL_LOG(
 			"Controller supports RDDM, skipping SYS_ERR_PROCESS\n");
 		return;
@@ -958,6 +965,12 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 		goto error_bhi_offset;
 	}
 
+	if (val >= mhi_cntrl->len) {
+		write_unlock_irq(&mhi_cntrl->pm_lock);
+		MHI_ERR("Invalid bhi offset:%x\n", val);
+		goto error_bhi_offset;
+	}
+
 	mhi_cntrl->bhi = mhi_cntrl->regs + val;
 
 	/* setup bhie offset if not set */
@@ -966,6 +979,12 @@ int mhi_async_power_up(struct mhi_controller *mhi_cntrl)
 		if (ret) {
 			write_unlock_irq(&mhi_cntrl->pm_lock);
 			MHI_CNTRL_ERR("Error getting bhie offset\n");
+			goto error_bhi_offset;
+		}
+
+		if (val >= mhi_cntrl->len) {
+			write_unlock_irq(&mhi_cntrl->pm_lock);
+			MHI_ERR("Invalid bhie offset:%x\n", val);
 			goto error_bhi_offset;
 		}
 
@@ -1478,6 +1497,26 @@ int mhi_pm_fast_resume(struct mhi_controller *mhi_cntrl, bool notify_client)
 		return -EIO;
 	}
 
+	if (mhi_cntrl->rddm_supported) {
+		if (mhi_get_exec_env(mhi_cntrl) == MHI_EE_RDDM &&
+		    !mhi_cntrl->power_down) {
+			mhi_cntrl->ee = MHI_EE_RDDM;
+			write_unlock_irq(&mhi_cntrl->pm_lock);
+
+			MHI_ERR("RDDM event occurred!\n");
+
+			/* notify critical clients with early notifications */
+			mhi_control_error(mhi_cntrl);
+
+			mhi_cntrl->status_cb(mhi_cntrl, mhi_cntrl->priv_data,
+					     MHI_CB_EE_RDDM);
+			wake_up_all(&mhi_cntrl->state_event);
+
+			tasklet_enable(&mhi_cntrl->mhi_event->task);
+			goto exit_pm_fast_resume;
+		}
+	}
+
 	/* restore the states */
 	mhi_cntrl->pm_state = mhi_cntrl->saved_pm_state;
 	mhi_cntrl->dev_state = mhi_cntrl->saved_dev_state;
@@ -1524,6 +1563,7 @@ int mhi_pm_fast_resume(struct mhi_controller *mhi_cntrl, bool notify_client)
 	if (MHI_REG_ACCESS_VALID(mhi_cntrl->pm_state))
 		mhi_timesync_log(mhi_cntrl);
 
+exit_pm_fast_resume:
 	MHI_LOG("Exit with pm_state:%s dev_state:%s\n",
 		to_mhi_pm_state_str(mhi_cntrl->pm_state),
 		TO_MHI_STATE_STR(mhi_cntrl->dev_state));
@@ -1575,6 +1615,7 @@ void mhi_device_get(struct mhi_device *mhi_dev, int vote)
 
 	if (vote & MHI_VOTE_DEVICE) {
 		read_lock_bh(&mhi_cntrl->pm_lock);
+		mhi_trigger_resume(mhi_cntrl);
 		mhi_cntrl->wake_get(mhi_cntrl, true);
 		MHI_LOG("dev_wake %d\n", atomic_read(&mhi_cntrl->dev_wake));
 		read_unlock_bh(&mhi_cntrl->pm_lock);
@@ -1619,6 +1660,57 @@ int mhi_device_get_sync(struct mhi_device *mhi_dev, int vote)
 }
 EXPORT_SYMBOL(mhi_device_get_sync);
 
+int mhi_device_get_sync_atomic(struct mhi_device *mhi_dev, int timeout_us)
+{
+	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
+
+	read_lock_bh(&mhi_cntrl->pm_lock);
+	if (MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state)) {
+		read_unlock_bh(&mhi_cntrl->pm_lock);
+		return -EIO;
+	}
+
+	mhi_cntrl->wake_get(mhi_cntrl, true);
+	read_unlock_bh(&mhi_cntrl->pm_lock);
+
+	atomic_inc(&mhi_dev->dev_vote);
+	pm_wakeup_hard_event(&mhi_cntrl->mhi_dev->dev);
+	mhi_cntrl->runtime_get(mhi_cntrl, mhi_cntrl->priv_data);
+
+	/* Return if client doesn't want us to wait */
+	if (!timeout_us) {
+		if (mhi_cntrl->pm_state != MHI_PM_M0)
+			MHI_ERR("Return without waiting for M0\n");
+
+		mhi_cntrl->runtime_put(mhi_cntrl, mhi_cntrl->priv_data);
+		return 0;
+	}
+
+	while (mhi_cntrl->pm_state != MHI_PM_M0 &&
+			!MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state) &&
+			timeout_us > 0) {
+		udelay(MHI_FORCE_WAKE_DELAY_US);
+		timeout_us -= MHI_FORCE_WAKE_DELAY_US;
+	}
+
+	if (MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state) || timeout_us <= 0) {
+		MHI_ERR("Did not enter M0 state, cur_state:%s pm_state:%s\n",
+			TO_MHI_STATE_STR(mhi_cntrl->dev_state),
+			to_mhi_pm_state_str(mhi_cntrl->pm_state));
+		read_lock_bh(&mhi_cntrl->pm_lock);
+		mhi_cntrl->wake_put(mhi_cntrl, false);
+		read_unlock_bh(&mhi_cntrl->pm_lock);
+		atomic_dec(&mhi_dev->dev_vote);
+		mhi_cntrl->runtime_put(mhi_cntrl, mhi_cntrl->priv_data);
+		return -ETIMEDOUT;
+	}
+
+	mhi_cntrl->runtime_put(mhi_cntrl, mhi_cntrl->priv_data);
+
+	return 0;
+}
+EXPORT_SYMBOL(mhi_device_get_sync_atomic);
+
 void mhi_device_put(struct mhi_device *mhi_dev, int vote)
 {
 	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
@@ -1654,6 +1746,10 @@ int mhi_force_rddm_mode(struct mhi_controller *mhi_cntrl)
 	MHI_CNTRL_LOG("Enter with pm_state:%s ee:%s\n",
 			to_mhi_pm_state_str(mhi_cntrl->pm_state),
 			TO_MHI_EXEC_STR(mhi_cntrl->ee));
+
+	/* device does not support RDDM */
+	if (!mhi_cntrl->rddm_supported)
+		return -EINVAL;
 
 	/* device already in rddm */
 	if (mhi_cntrl->ee == MHI_EE_RDDM)

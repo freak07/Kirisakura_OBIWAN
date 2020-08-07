@@ -31,6 +31,7 @@
 #include <linux/etherdevice.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
+#include <linux/pm_runtime.h>
 #include <linux/soc/qcom/qmi.h>
 #include <linux/sysfs.h>
 #include <soc/qcom/memory_dump.h>
@@ -610,7 +611,7 @@ static int icnss_driver_event_server_arrive(struct icnss_priv *priv,
 			goto err_power_on;
 		}
 
-		icnss_pr_dbg("MEM_BASE pa: %pa, va: 0x%pK\n",
+		icnss_pr_dbg("Non-Secured Bar Address pa: %pa, va: 0x%pK\n",
 			     &priv->mem_base_pa,
 			     priv->mem_base_va);
 
@@ -1871,8 +1872,9 @@ int icnss_unregister_driver(struct icnss_driver_ops *ops)
 
 	icnss_pr_dbg("Unregistering driver, state: 0x%lx\n", priv->state);
 
-	if (!priv->ops) {
+	if (!priv->ops || (!test_bit(ICNSS_DRIVER_PROBED, &penv->state))) {
 		icnss_pr_err("Driver not registered\n");
+		penv->ops = NULL;
 		ret = -ENOENT;
 		goto out;
 	}
@@ -2470,6 +2472,9 @@ int icnss_trigger_recovery(struct device *dev)
 	if (!ret)
 		set_bit(ICNSS_HOST_TRIGGERED_PDR, &priv->state);
 
+	icnss_pr_warn("PD restart request completed, ret: %d state: 0x%lx\n",
+		      ret, priv->state);
+
 out:
 	return ret;
 }
@@ -2803,6 +2808,12 @@ static int icnss_smmu_dt_parse(struct icnss_priv *priv)
 	if (ret) {
 		icnss_pr_err("SMMU IOVA base not found\n");
 	} else {
+		priv->smmu_iova_start = addr_win[0];
+		priv->smmu_iova_len = addr_win[1];
+		icnss_pr_dbg("SMMU IOVA start: %pa, len: %zx\n",
+			     &priv->smmu_iova_start,
+			     priv->smmu_iova_len);
+
 		priv->iommu_domain =
 			iommu_get_domain_for_dev(&pdev->dev);
 
@@ -2819,6 +2830,34 @@ static int icnss_smmu_dt_parse(struct icnss_priv *priv)
 				     priv->smmu_iova_ipa_len);
 		}
 	}
+
+	return 0;
+}
+
+int icnss_get_iova(struct icnss_priv *priv, u64 *addr, u64 *size)
+{
+	if (!priv)
+		return -ENODEV;
+
+	if (!priv->smmu_iova_len)
+		return -EINVAL;
+
+	*addr = priv->smmu_iova_start;
+	*size = priv->smmu_iova_len;
+
+	return 0;
+}
+
+int icnss_get_iova_ipa(struct icnss_priv *priv, u64 *addr, u64 *size)
+{
+	if (!priv)
+		return -ENODEV;
+
+	if (!priv->smmu_iova_ipa_len)
+		return -EINVAL;
+
+	*addr = priv->smmu_iova_ipa_start;
+	*size = priv->smmu_iova_ipa_len;
 
 	return 0;
 }
@@ -2853,6 +2892,21 @@ static void icnss_init_control_params(struct icnss_priv *priv)
 	}
 }
 
+static inline void icnss_runtime_pm_init(struct icnss_priv *priv)
+{
+	pm_runtime_get_sync(&priv->pdev->dev);
+	pm_runtime_forbid(&priv->pdev->dev);
+	pm_runtime_set_active(&priv->pdev->dev);
+	pm_runtime_enable(&priv->pdev->dev);
+}
+
+static inline void icnss_runtime_pm_deinit(struct icnss_priv *priv)
+{
+	pm_runtime_disable(&priv->pdev->dev);
+	pm_runtime_allow(&priv->pdev->dev);
+	pm_runtime_put_sync(&priv->pdev->dev);
+}
+
 static int icnss_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -2870,7 +2924,7 @@ static int icnss_probe(struct platform_device *pdev)
 	if (!of_id || !of_id->data) {
 		icnss_pr_err("Failed to find of match device!\n");
 		ret = -ENODEV;
-		goto out;
+		goto out_reset_drvdata;
 	}
 
 	device_id = of_id->data;
@@ -2894,15 +2948,15 @@ static int icnss_probe(struct platform_device *pdev)
 
 	ret = icnss_resource_parse(priv);
 	if (ret)
-		goto out;
+		goto out_reset_drvdata;
 
 	ret = icnss_msa_dt_parse(priv);
 	if (ret)
-		goto out;
+		goto out_free_resources;
 
 	ret = icnss_smmu_dt_parse(priv);
 	if (ret)
-		goto out;
+		goto out_free_resources;
 
 	spin_lock_init(&priv->event_lock);
 	spin_lock_init(&priv->on_off_lock);
@@ -2951,9 +3005,13 @@ static int icnss_probe(struct platform_device *pdev)
 
 	init_completion(&priv->unblock_shutdown);
 
-	ret = icnss_genl_init();
-	if (ret < 0)
-		icnss_pr_err("ICNSS genl init failed %d\n", ret);
+	if (priv->device_id == WCN6750_DEVICE_ID) {
+		ret = icnss_genl_init();
+		if (ret < 0)
+			icnss_pr_err("ICNSS genl init failed %d\n", ret);
+
+		icnss_runtime_pm_init(priv);
+	}
 
 	icnss_pr_info("Platform driver probed successfully\n");
 
@@ -2965,9 +3023,10 @@ out_destroy_wq:
 	destroy_workqueue(priv->event_wq);
 smmu_cleanup:
 	priv->iommu_domain = NULL;
-out:
+out_free_resources:
+	icnss_put_resources(priv);
+out_reset_drvdata:
 	dev_set_drvdata(dev, NULL);
-
 	return ret;
 }
 
@@ -2977,7 +3036,10 @@ static int icnss_remove(struct platform_device *pdev)
 
 	icnss_pr_info("Removing driver: state: 0x%lx\n", priv->state);
 
-	icnss_genl_exit();
+	if (priv->device_id == WCN6750_DEVICE_ID) {
+		icnss_genl_exit();
+		icnss_runtime_pm_deinit(priv);
+	}
 
 	device_init_wakeup(&priv->pdev->dev, false);
 
@@ -3003,6 +3065,8 @@ static int icnss_remove(struct platform_device *pdev)
 	priv->iommu_domain = NULL;
 
 	icnss_hw_power_off(priv);
+
+	icnss_put_resources(priv);
 
 	dev_set_drvdata(&pdev->dev, NULL);
 
@@ -3133,15 +3197,82 @@ out:
 	}
 	return ret;
 }
+
+static int icnss_pm_runtime_suspend(struct device *dev)
+{
+	struct icnss_priv *priv = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (priv->magic != ICNSS_MAGIC) {
+		icnss_pr_err("Invalid drvdata for runtime suspend: dev %pK, data %pK, magic 0x%x\n",
+			     dev, priv, priv->magic);
+		return -EINVAL;
+	}
+
+	if (!priv->ops || !priv->ops->runtime_suspend)
+		goto out;
+
+	icnss_pr_vdbg("Runtime suspend\n");
+	ret = priv->ops->runtime_suspend(dev);
+
+out:
+	return ret;
+}
+
+static int icnss_pm_runtime_resume(struct device *dev)
+{
+	struct icnss_priv *priv = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (priv->magic != ICNSS_MAGIC) {
+		icnss_pr_err("Invalid drvdata for runtime resume: dev %pK, data %pK, magic 0x%x\n",
+			     dev, priv, priv->magic);
+		return -EINVAL;
+	}
+
+	if (!priv->ops || !priv->ops->runtime_resume)
+		goto out;
+
+	ret = wlfw_exit_power_save_send_msg(priv);
+	if (ret) {
+		priv->stats.pm_resume_err++;
+		return ret;
+	}
+
+	icnss_pr_vdbg("Runtime resume\n");
+	ret = priv->ops->runtime_resume(dev);
+
+out:
+	return ret;
+}
+
+static int icnss_pm_runtime_idle(struct device *dev)
+{
+	icnss_pr_vdbg("Runtime idle\n");
+
+	pm_request_autosuspend(dev);
+
+	return -EBUSY;
+}
 #endif
 
+#ifdef CONFIG_CNSS_QCA6750
+static const struct dev_pm_ops icnss_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(icnss_pm_suspend,
+				icnss_pm_resume)
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(icnss_pm_suspend_noirq,
+				      icnss_pm_resume_noirq)
+	SET_RUNTIME_PM_OPS(icnss_pm_runtime_suspend, icnss_pm_runtime_resume,
+			   icnss_pm_runtime_idle)
+};
+#else
 static const struct dev_pm_ops icnss_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(icnss_pm_suspend,
 				icnss_pm_resume)
 	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(icnss_pm_suspend_noirq,
 				      icnss_pm_resume_noirq)
 };
-
+#endif
 
 static struct platform_driver icnss_driver = {
 	.probe  = icnss_probe,

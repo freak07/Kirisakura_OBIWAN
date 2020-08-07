@@ -27,6 +27,7 @@ enum cnss_bus_width_type {
 enum cnss_platform_cap_flag {
 	CNSS_HAS_EXTERNAL_SWREG = 0x01,
 	CNSS_HAS_UART_ACCESS = 0x02,
+	CNSS_HAS_DRV_SUPPORT = 0x04,
 };
 
 struct cnss_platform_cap {
@@ -212,6 +213,7 @@ extern int cnss_wlan_pm_control(struct device *dev, bool vote);
 extern int cnss_auto_suspend(struct device *dev);
 extern int cnss_auto_resume(struct device *dev);
 extern int cnss_pci_is_drv_connected(struct device *dev);
+extern int cnss_pci_force_wake_request_sync(struct device *dev, int timeout);
 extern int cnss_pci_force_wake_request(struct device *dev);
 extern int cnss_pci_is_device_awake(struct device *dev);
 extern int cnss_pci_force_wake_release(struct device *dev);
