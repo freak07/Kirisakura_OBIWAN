@@ -346,10 +346,7 @@ static void kgsl_sync_timeline_signal(struct kgsl_sync_timeline *ktimeline,
 
 void kgsl_sync_timeline_destroy(struct kgsl_context *context)
 {
-	struct kgsl_sync_timeline *ktimeline = context->ktimeline;
-
-	kfree(ktimeline->name);
-	kfree(ktimeline);
+	kfree(context->ktimeline);
 }
 
 static void kgsl_sync_timeline_release(struct kref *kref)
