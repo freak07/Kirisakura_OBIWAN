@@ -3719,8 +3719,8 @@ void sched_set_refresh_rate_walt()
 	if (HZ == 250 && sysctl_sched_dynamic_ravg_window_enable) {
 		if (asus_current_fps >= 60 && asus_current_fps < 90)
 		{
-			pr_err("[WALT] set 60fps WALT RAVG_Window\n");
-			display_sched_ravg_window_nr_ticks = 5;
+			pr_err("[WALT] set 144fps/forced144 WALT RAVG_Window\n");
+			display_sched_ravg_window_nr_ticks = 1;
 		}
 		else if (asus_current_fps >= 90 && asus_current_fps < 120)
 		{

@@ -4762,8 +4762,8 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 
 	if (type == 2)
 		{
-		cmd_type = DSI_CMD_SET_60;
-			pr_err("[WALT-Disp] set 60fps WALT RAVG_Window\n");
+		cmd_type = DSI_CMD_SET_144;
+			pr_err("[WALT-Disp] set 144fps/forced144 WALT RAVG_Window\n");
 		sched_set_refresh_rate_walt();
 		}
 	else if (type == 1)
