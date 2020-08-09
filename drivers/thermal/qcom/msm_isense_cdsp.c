@@ -16,6 +16,10 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 
+#ifdef CONFIG_QTI_LIMITS_ISENSE_CDSP
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
+#endif
+
 #define LIMITS_SMEM_CONFIG        619
 #define PARTITION_SIZE_BYTES      4096
 
