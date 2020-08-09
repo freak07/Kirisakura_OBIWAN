@@ -33,8 +33,8 @@ struct limits_isense_cdsp_smem_data {
 static struct limits_isense_cdsp_smem_data  *limits_isense_cdsp_data;
 static struct limits_isense_cdsp_sysfs      *limits_isense_cdsp_sysfs;
 
-static ssize_t limits_isense_cdsp_data_show(struct kobject *kobj,
-			struct kobj_attribute *attr, char *buf)
+static ssize_t limits_isense_cdsp_data_show(struct module_attribute *mattr,
+			struct module_kobject *mk, char *buf)
 {
 	if (!limits_isense_cdsp_data)
 		return -ENODATA;
