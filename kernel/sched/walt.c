@@ -3712,32 +3712,57 @@ unlock:
 	return ret;
 }
 
-extern int  asus_current_fps;           //from drm_atomic_helper.c
+extern int asus_current_fps;           //from drm_atomic_helper.c
+extern bool dim_fps_override;
+extern int dim_fps;
 
 void sched_set_refresh_rate_walt()
 {
 	if (HZ == 250 && sysctl_sched_dynamic_ravg_window_enable) {
 		if (asus_current_fps >= 60 && asus_current_fps < 90)
-		{
-			pr_err("[WALT] set 144fps/forced144 WALT RAVG_Window\n");
-			display_sched_ravg_window_nr_ticks = 1;
-		}
-		else if (asus_current_fps >= 90 && asus_current_fps < 120)
+			{
+			if (dim_fps_override == false)
+				{
+				pr_err("[WALT] set 60fps DIM WALT RAVG_Window\n");
+				display_sched_ravg_window_nr_ticks = 5;
+				}
+			if ((dim_fps_override == true) && (dim_fps == 1))
+				{
+				pr_err("[WALT] set 90fps DIM WALT RAVG_Window\n");
+				display_sched_ravg_window_nr_ticks = 3;
+				}
+			if ((dim_fps_override == true) && (dim_fps == 2))
+				{
+				pr_err("[WALT] set 120fps DIM WALT RAVG_Window\n");
+				display_sched_ravg_window_nr_ticks = 2;
+				}
+			if ((dim_fps_override == true) && (dim_fps == 3))
+				{
+				pr_err("[WALT] set 144fps DIM WALT RAVG_Window\n");
+				display_sched_ravg_window_nr_ticks = 1;
+				}
+			if ((dim_fps_override == true) && (dim_fps == 4))
+				{
+				pr_err("[WALT] set 160fps DIM WALT RAVG_Window\n");
+				display_sched_ravg_window_nr_ticks = 1;
+				}
+			}
+	else if (asus_current_fps >= 90 && asus_current_fps < 120)
 		{
 			pr_err("[WALT] set 90fps WALT RAVG_Window\n");
 			display_sched_ravg_window_nr_ticks = 3;
 		}
-		else if (asus_current_fps == 120)
+	else if (asus_current_fps == 120)
 		{
 			pr_err("[WALT] set 120fps WALT RAVG_Window\n");
 			display_sched_ravg_window_nr_ticks = 2;
 		}
-		else if (asus_current_fps == 144)
+	else if (asus_current_fps == 144)
 		{
 			pr_err("[WALT] set 144fps WALT RAVG_Window\n");
 			display_sched_ravg_window_nr_ticks = 1;
 		}
-		else if (asus_current_fps == 160)
+	else if (asus_current_fps == 160)
 		{
 			pr_err("[WALT] set 160fps WALT RAVG_Window\n");
 			display_sched_ravg_window_nr_ticks = 1;
