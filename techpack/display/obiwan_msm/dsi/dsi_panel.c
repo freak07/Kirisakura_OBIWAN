@@ -751,13 +751,18 @@ int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 			backlight_converted = asus_alpm_bl_low;
 			pr_err("[Display] convert to %d, reason AOD\n", asus_alpm_bl_low);
 		}
-	} else if (bl_lvl < 400) {
+	} else if (bl_lvl < 5) {
 		pr_err("[Display] convert to 400, reason pixelworks\n");
-		backlight_converted = 400;
+		backlight_converted = 5;
 	}
 
 	return backlight_converted;
 }
+
+static bool bl_dimmer = true;
+module_param(bl_dimmer, bool, 0644);
+static int bl_min = 9;
+module_param(bl_min, int, 0644);
 
 static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	u32 bl_lvl)
@@ -781,6 +786,31 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	/* ASUS BSP DP, bl for station --- */
 
 	bl_lvl = asus_display_convert_backlight(panel, bl_lvl);
+
+	if ((bl_dimmer == true) && (bl_lvl == 498))
+		{
+		bl_lvl = 380 ;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 482))
+		{
+		bl_lvl = 300;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 466))
+		{
+		bl_lvl = 200;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 450))
+		{
+		bl_lvl = 100;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 434))
+		{
+		bl_lvl = 50;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 402))
+		{
+		bl_lvl = bl_min;
+		}
 
 	dsi = &panel->mipi_device;
 
@@ -4729,6 +4759,11 @@ error:
 	return rc;
 }
 
+bool dim_fps_override = true;
+module_param(dim_fps_override, bool, 0644);
+int dim_fps = 3 ;
+module_param(dim_fps, int, 0644);
+
 void sched_set_refresh_rate_walt(void);
 
 /*
@@ -4762,8 +4797,32 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 
 	if (type == 2)
 		{
+		if (dim_fps_override == false)
+		{
+		pr_err("DIM_FPS = 60");
+		cmd_type = DSI_CMD_SET_60;
+		}
+		if ((dim_fps_override == true) && (dim_fps == 1))
+		{
+		pr_err("DIM_FPS = 90");
+		cmd_type = DSI_CMD_SET_90;
+		}
+		if ((dim_fps_override == true) && (dim_fps == 2))
+		{
+		pr_err("DIM_FPS = 120");
+		cmd_type = DSI_CMD_SET_120;
+		}
+		if ((dim_fps_override == true) && (dim_fps == 3))
+		{
+		pr_err("DIM_FPS = 144");
 		cmd_type = DSI_CMD_SET_144;
-			pr_err("[WALT-Disp] set 144fps/forced144 WALT RAVG_Window\n");
+		}
+		if ((dim_fps_override == true) && (dim_fps == 4))
+		{
+		pr_err("DIM_FPS = 160");
+		cmd_type = DSI_CMD_SET_160;
+		}
+		pr_err("[WALT-Disp] set dim_fps_override WALT RAVG_Window\n");
 		sched_set_refresh_rate_walt();
 		}
 	else if (type == 1)
