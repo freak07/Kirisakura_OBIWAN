@@ -869,11 +869,11 @@ int f2fs_merge_page_bio(struct f2fs_io_info *fio)
 	bio_encrypted = f2fs_may_encrypt_bio(inode, fio);
 
 	if (bio && !page_is_mergeable(fio->sbi, bio, *fio->last_block,
-						fio->new_blkaddr)) {
+						fio->new_blkaddr))
 		f2fs_submit_merged_ipu_write(fio->sbi, &bio, NULL);
 
 	/* ICE support */
-	if (!fscrypt_mergeable_bio(bio, dun, bio_encrypted, bi_crypt_skip)) {
+	if (!fscrypt_mergeable_bio(bio, dun, bio_encrypted, bi_crypt_skip))
 		f2fs_submit_merged_ipu_write(fio->sbi, &bio, NULL);
 
 alloc_new:
