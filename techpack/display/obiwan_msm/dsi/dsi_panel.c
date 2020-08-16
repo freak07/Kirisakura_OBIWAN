@@ -787,25 +787,94 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 
 	bl_lvl = asus_display_convert_backlight(panel, bl_lvl);
 
-	if ((bl_dimmer == true) && (bl_lvl == 498))
+
+	if ((bl_dimmer == true) && (bl_lvl == 771))
 		{
-		bl_lvl = 380 ;
+		bl_lvl = 390;
 		}
-	if ((bl_dimmer == true) && (bl_lvl == 482))
+	if ((bl_dimmer == true) && (bl_lvl == 755))
+		{
+		bl_lvl = 380;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 739))
+		{
+		bl_lvl = 370;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 723))
+		{
+		bl_lvl = 360;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 707))
+		{
+		bl_lvl = 345;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 691))
+		{
+		bl_lvl = 330 ;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 675))
+		{
+		bl_lvl = 315;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 659))
 		{
 		bl_lvl = 300;
 		}
+	if ((bl_dimmer == true) && (bl_lvl == 643))
+		{
+		bl_lvl = 285;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 627))
+		{
+		bl_lvl = 270;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 611))
+		{
+		bl_lvl = 255;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 595))
+		{
+		bl_lvl = 240;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 578))
+		{
+		bl_lvl = 225;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 562))
+		{
+		bl_lvl = 210;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 546))
+		{
+		bl_lvl = 195;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 530))
+		{
+		bl_lvl = 180;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 514))
+		{
+		bl_lvl = 165;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 498))
+		{
+		bl_lvl = 150;
+		}
+	if ((bl_dimmer == true) && (bl_lvl == 482))
+		{
+		bl_lvl = 135;
+		}
 	if ((bl_dimmer == true) && (bl_lvl == 466))
 		{
-		bl_lvl = 200;
+		bl_lvl = 120;
 		}
 	if ((bl_dimmer == true) && (bl_lvl == 450))
 		{
-		bl_lvl = 100;
+		bl_lvl = 105;
 		}
 	if ((bl_dimmer == true) && (bl_lvl == 434))
 		{
-		bl_lvl = 50;
+		bl_lvl = 90;
 		}
 	if ((bl_dimmer == true) && (bl_lvl == 402))
 		{
