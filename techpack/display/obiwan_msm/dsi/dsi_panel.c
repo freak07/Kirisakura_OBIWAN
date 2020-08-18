@@ -751,9 +751,9 @@ int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 			backlight_converted = asus_alpm_bl_low;
 			pr_err("[Display] convert to %d, reason AOD\n", asus_alpm_bl_low);
 		}
-	} else if (bl_lvl < 5) {
+	} else if (bl_lvl < 400) {
 		pr_err("[Display] convert to 400, reason pixelworks\n");
-		backlight_converted = 5;
+		backlight_converted = 400;
 	}
 
 	return backlight_converted;
@@ -876,7 +876,7 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		{
 		bl_lvl = 90;
 		}
-	if ((bl_dimmer == true) && (bl_lvl == 402))
+	if ((bl_dimmer == true) && (bl_lvl <= 402))
 		{
 		bl_lvl = bl_min;
 		}
