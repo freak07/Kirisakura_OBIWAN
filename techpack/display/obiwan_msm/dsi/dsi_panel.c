@@ -761,7 +761,7 @@ int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 
 static bool bl_dimmer = true;
 module_param(bl_dimmer, bool, 0644);
-static int bl_min = 9;
+static int bl_min = 60;
 module_param(bl_min, int, 0644);
 
 static int dsi_panel_update_backlight(struct dsi_panel *panel,
