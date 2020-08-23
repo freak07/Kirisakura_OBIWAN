@@ -3716,7 +3716,7 @@ extern int asus_current_fps;           //from drm_atomic_helper.c
 extern bool dim_fps_override;
 extern int dim_fps;
 
-void sched_set_refresh_rate_walt()
+void sched_set_refresh_rate_walt(void)
 {
 	if (HZ == 250 && sysctl_sched_dynamic_ravg_window_enable) {
 		if (asus_current_fps >= 60 && asus_current_fps < 90)
