@@ -18,7 +18,7 @@ export CLANG_BIN_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r399163/bin
 export PATH=${CLANG_PATH}:${PATH}
 export DTC_EXT=/home/miles/Downloads/DU_Tools/dtc-aosp
 export CLANG_TRIPLE=aarch64-linux-gnu-
-export CROSS_COMPILE=~/Android_Build/GCC_Google_Arm64/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+export CROSS_COMPILE=~/Android_Build/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
 # export CROSS_COMPILE_ARM32=~/Android_Build/GCC_Google_Arm32/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
 # export LD_LIBRARY_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r383902c/lib64:$LD_LIBRARY_PATH
 
