@@ -26,7 +26,14 @@ MODULE_LICENSE("GPL");
 
 //sweep2sleep
 #define S2S_PWRKEY_DUR         20
-#if 1
+#ifdef CONFIG_MACH_ASUS_ZS661KS
+// 2340x1080 ROG3
+static int S2S_Y_MAX = 2340;
+static int S2S_X_MAX = 1080;
+static int S2S_X_LEFT_CORNER_END = 110;
+static int S2S_X_RIGHT_CORNER_START = 970; // 1080-110
+
+#elif 1
 // 3168x1440 // oneplus 8 pro
 static int S2S_Y_MAX = 3168;
 static int S2S_X_MAX = 1440;
@@ -159,6 +166,8 @@ __setup("androidboot.project_name=", get_model);
 
 // device specifics
 static void s2s_setup_values() {
+#ifndef CONFIG_MACH_ASUS_ZS661KS
+// not ROG3
 	if ( hw_version == OP8PRO ) {
 		// op8pro 3040x1440
 		pr_info("%s hw op8pro\n",__func__);
@@ -171,6 +180,7 @@ static void s2s_setup_values() {
 		S2S_X_LEFT_CORNER_END = 100;
 		S2S_X_RIGHT_CORNER_START = 1080-100;
 	}
+#endif
 }
 
 //#define HZ_300
@@ -869,6 +879,9 @@ static int input_dev_filter(struct input_dev *dev) {
 /*	if (strstr(dev->name, "qpnp_pon")) {
 		sweep2sleep_pwrdev = dev;
 	}*/
+	if (strstr(dev->name, "goodix_ts")) {
+		return 0;
+	} else
 	if (strstr(dev->name, "synaptics,s3320")) {
 		return 0;
 	} else
