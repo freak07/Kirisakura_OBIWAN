@@ -2675,6 +2675,51 @@ static void aw8697_haptic_brightness_set(struct led_classdev *cdev,
 	mutex_unlock(&aw8697->lock);
 
 }
+#ifdef CONFIG_UCI
+void set_vibrate_int(int num, int boost_level) {
+
+	if (g_aw8697 == NULL) return;
+
+	if (!g_aw8697->ram_init)
+		return;
+	if (g_aw8697->ramupdate_flag < 0)
+		return;
+	g_aw8697->amplitude = boost_level;
+
+	mutex_lock(&g_aw8697->lock);
+
+	aw8697_haptic_stop(g_aw8697);
+	if (g_aw8697->amplitude > 0) {
+		aw8697_haptic_ram_vbat_comp(g_aw8697, false);
+		aw8697_haptic_play_wav_seq(g_aw8697, g_aw8697->amplitude);
+	}
+
+	mutex_unlock(&g_aw8697->lock);
+
+        mdelay(num); // cannot sleep, as this can be in atomic context as well
+
+// stop
+	mutex_lock(&g_aw8697->lock);
+	aw8697_haptic_stop(g_aw8697);
+	mutex_unlock(&g_aw8697->lock);
+
+
+}
+
+
+void set_vibrate_boosted(int num) {
+	set_vibrate_int(num, 70);
+}
+EXPORT_SYMBOL(set_vibrate_boosted);
+void set_vibrate(int num) {
+	set_vibrate_int(num, 40);
+}
+EXPORT_SYMBOL(set_vibrate);
+void set_vibrate_2(int num, int boost_level) {
+	set_vibrate_int(num, boost_level);
+}
+EXPORT_SYMBOL(set_vibrate_2);
+#endif
 #endif
 
 static ssize_t aw8697_state_show(struct device *dev,
