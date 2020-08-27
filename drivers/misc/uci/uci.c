@@ -34,6 +34,7 @@
 #ifdef CONFIG_DRM
 #include <drm/drm_panel.h>
 static struct drm_panel *active_panel;
+
 #endif
 
 
@@ -64,7 +65,18 @@ struct notifier_block *uci_fb_notifier;
 #elif defined(CONFIG_MSM_DRM_NOTIFY)
 struct notifier_block *uci_msm_drm_notif;
 #endif
-
+#ifdef CONFIG_DRM
+bool drm_registered = false;
+void try_register_drm(void) {
+	if (drm_registered) return;
+	active_panel = uci_get_active_panel();
+	if (active_panel) {
+		drm_panel_notifier_register(active_panel,
+			uci_fb_notifier);
+	    drm_registered = true;
+	}
+}
+#endif
 
 // file operations
 int uci_fwrite(struct file* file, loff_t pos, unsigned char* data, unsigned int size) {
@@ -538,6 +550,9 @@ static void parse_work_func(struct work_struct * parse_work_func_work)
 #ifdef UCI_LOG_DEBUG
 	pr_info("%s uci \n",__func__);
 #endif
+#ifdef CONFIG_DRM
+	try_register_drm();
+#endif
 	if (should_parse_user) parse_uci_user_cfg_file();
 	if (should_parse_sys) parse_uci_sys_cfg_file();
 	if (!first_parse_done) {
@@ -733,10 +748,7 @@ static int __init uci_init(void)
 #if defined(CONFIG_DRM)
 	uci_fb_notifier = kzalloc(sizeof(struct notifier_block), GFP_KERNEL);;
 	uci_fb_notifier->notifier_call = fb_notifier_callback;
-	if (active_panel) {
-		drm_panel_notifier_register(active_panel,
-			uci_fb_notifier);
-	}
+	try_register_drm();
 #elif defined(CONFIG_FB)
 	uci_fb_notifier = kzalloc(sizeof(struct notifier_block), GFP_KERNEL);;
 	uci_fb_notifier->notifier_call = fb_notifier_callback;

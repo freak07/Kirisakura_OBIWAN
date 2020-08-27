@@ -1,6 +1,8 @@
 #ifndef __UCI_H__
 #define __UCI_H__
 
+#include <drm/drm_panel.h>
+
 #define UCI_INVALID_INT -999999
 
 // user config file to read data coming from user space
@@ -53,5 +55,8 @@ extern void uci_add_user_listener(void (*f)(void));
 
 /** write operations */
 extern void write_uci_out(char *message);
+
+/** grab active drm panel */
+extern struct drm_panel *uci_get_active_panel(void);
 
 #endif /* __UCI_H__ */
