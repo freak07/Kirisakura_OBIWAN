@@ -8,6 +8,8 @@
 #if 1
 #include <linux/slab.h>
 
+#define REPLACE_SN
+
 #ifdef CONFIG_UCI
 #include <linux/spinlock.h>
 
