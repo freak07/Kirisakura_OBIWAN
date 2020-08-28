@@ -761,7 +761,7 @@ static int aw8697_haptic_stop_delay(struct aw8697 *aw8697)
 
 static int aw8697_haptic_stop(struct aw8697 *aw8697)
 {
-	if((gVibDebugLog & 0x0001)== 0x0001)
+//	if((gVibDebugLog & 0x0001)== 0x0001)
 		pr_info("%s enter\n", __func__);
 
 	aw8697_haptic_play_go(aw8697, false);
@@ -773,7 +773,7 @@ static int aw8697_haptic_stop(struct aw8697 *aw8697)
 
 static int aw8697_haptic_start(struct aw8697 *aw8697)
 {
-	//pr_info("%s enter\n", __func__);
+	pr_info("%s enter\n", __func__);
 
 	aw8697_haptic_play_go(aw8697, true);
 
@@ -1234,6 +1234,7 @@ static int aw8697_haptic_ram_vbat_comp(struct aw8697 *aw8697, bool flag)
 {
 	int temp_gain = 0;
 
+	pr_info("%s enter\n",__func__);
 	if (flag) {
 		if
 		(aw8697->ram_vbat_comp == AW8697_HAPTIC_RAM_VBAT_COMP_ENABLE) {
@@ -1790,6 +1791,7 @@ int aw8697_load_rtp_file(void)
 static void aw8697_rtp_work_routine(struct work_struct *work)
 {
 	struct aw8697 *aw8697 = g_aw8697;
+	pr_info("%s starting work...\n",__func__);
 	aw8697->rtp_routine_on = 1;
 
 	mutex_lock(&aw8697->lock);
@@ -1914,7 +1916,7 @@ static void aw8697_haptic_audio_work_routine(struct work_struct *work)
 	int rtp_is_going_on = 0;
 #endif
 
-	//pr_info("%s enter\n", __func__);
+	pr_info("%s enter\n", __func__);
 
 	haptic_audio = &(aw8697->haptic_audio);
 	mutex_lock(&aw8697->haptic_audio.lock);
@@ -2676,6 +2678,8 @@ static void aw8697_haptic_brightness_set(struct led_classdev *cdev,
 
 }
 #ifdef CONFIG_UCI
+static void aw8697_haptic_rtp_mode_enter(void);
+
 void set_vibrate_int(int num, int boost_level) {
 
 	if (g_aw8697 == NULL) return;
@@ -2688,12 +2692,28 @@ void set_vibrate_int(int num, int boost_level) {
 
 	mutex_lock(&g_aw8697->lock);
 
+        cancel_delayed_work(&g_aw8697->gain_work);
 	aw8697_haptic_stop(g_aw8697);
+	aw8697_haptic_set_rtp_aei(g_aw8697, false);
+	aw8697_interrupt_clear(g_aw8697);
+
+	aw8697_haptic_rtp_mode_enter();
+
 	if (g_aw8697->amplitude > 0) {
 		aw8697_haptic_ram_vbat_comp(g_aw8697, false);
+
+		if (num>50) { // longer loop
+		aw8697_haptic_set_wav_seq(g_aw8697, 0, (unsigned char)1);
+		aw8697_haptic_set_wav_seq(g_aw8697, 1, 0);
+		aw8697_haptic_set_wav_loop(g_aw8697, 0x00,
+				   AW8697_BIT_WAVLOOP_INIFINITELY);
+		} else { // short haptic
+			aw8697_haptic_set_wav_seq(g_aw8697, 0, (unsigned char)1);
+			aw8697_haptic_set_wav_seq(g_aw8697, 1, 0);
+			aw8697_haptic_set_wav_loop(g_aw8697, 0, 0);
+		}
 		aw8697_haptic_play_wav_seq(g_aw8697, g_aw8697->amplitude);
 	}
-
 	mutex_unlock(&g_aw8697->lock);
 
         mdelay(num); // cannot sleep, as this can be in atomic context as well
@@ -2708,11 +2728,11 @@ void set_vibrate_int(int num, int boost_level) {
 
 
 void set_vibrate_boosted(int num) {
-	set_vibrate_int(num, 70);
+	set_vibrate_int(num, 40);
 }
 EXPORT_SYMBOL(set_vibrate_boosted);
 void set_vibrate(int num) {
-	set_vibrate_int(num, 40);
+	set_vibrate_int(num, 30);
 }
 EXPORT_SYMBOL(set_vibrate);
 void set_vibrate_2(int num, int boost_level) {
