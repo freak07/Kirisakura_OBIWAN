@@ -185,7 +185,7 @@ static void s2s_setup_values() {
 
 //#define HZ_300
 #define HZ_250
-#define CONFIG_DEBUG_S2S
+//#define CONFIG_DEBUG_S2S
 
 #ifdef HZ_300
 #define TIME_DIFF 15
