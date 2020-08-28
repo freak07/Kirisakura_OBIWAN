@@ -17,6 +17,11 @@ static int asus_bat_low = 0;
 static int asus_flash_state = 0;
 static struct cam_flash_ctrl *asus_fctrl;
 //ASUS_BSP --- Shianliang add low battery checking
+
+#ifdef CONFIG_UCI
+#include <linux/notification/notification.h>
+#endif
+
 int cam_flash_prepare(struct cam_flash_ctrl *flash_ctrl,
 	bool regulator_enable)
 {
@@ -528,6 +533,9 @@ int cam_flash_off(struct cam_flash_ctrl *flash_ctrl)
 
 	asus_flash_state = 0; //ASUS_BSP +++ Shianliang add low battery checking
 
+#if CONFIG_UCI
+	ntf_set_cam_flashlight(false);
+#endif
 	return 0;
 }
 
@@ -553,6 +561,9 @@ int cam_flash_low(
 	if (rc)
 		CAM_ERR(CAM_FLASH, "Fire Torch failed: %d", rc);
 
+#if CONFIG_UCI
+	ntf_set_cam_flashlight(true);
+#endif
 	return rc;
 }
 
@@ -578,6 +589,9 @@ int cam_flash_high(
 	if (rc)
 		CAM_ERR(CAM_FLASH, "Fire Flash Failed: %d", rc);
 
+#if CONFIG_UCI
+	ntf_set_cam_flashlight(true);
+#endif
 	return rc;
 }
 
