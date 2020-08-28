@@ -14,6 +14,10 @@
 #include "dsi_ctrl_hw.h"
 #include "dsi_parser.h"
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+
 /**
  * topology is currently defined by a set of following 3 values:
  * 1. num of layer mixers
@@ -494,6 +498,11 @@ static int dsi_panel_set_pinctrl_state(struct dsi_panel *panel, bool enable)
 	return rc;
 }
 
+#ifdef CONFIG_UCI
+static bool screen_is_on = true; // start with true, on/off is set at power off/on only!
+static bool listener_added = false;
+static void uci_user_listener(void);
+#endif
 
 static int dsi_panel_power_on(struct dsi_panel *panel)
 {
@@ -528,6 +537,9 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 	// ASUS_BSP --- Touch
 
 	dp_panel_resume(); /* ASUS BSP DP +++ */
+#ifdef CONFIG_UCI
+	screen_is_on = true;
+#endif
 
 	goto exit;
 
@@ -597,6 +609,9 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 
 	asus_var_regulator_last_on = false;
 
+#ifdef CONFIG_UCI
+	screen_is_on = false;
+#endif
 
 	return rc;
 }
@@ -737,6 +752,16 @@ static int dsi_panel_wled_register(struct dsi_panel *panel,
 	return 0;
 }
 
+#ifdef CONFIG_UCI
+
+struct dsi_panel *g_panel = NULL;
+static int backlight_min = 6;
+static bool backlight_dimmer = false;
+static u32 last_brightness;
+static bool first_brightness_set = false;
+
+#endif
+
 int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 {
 	int backlight_converted = bl_lvl;
@@ -759,11 +784,6 @@ int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 	return backlight_converted;
 }
 
-static bool bl_dimmer = true;
-module_param(bl_dimmer, bool, 0644);
-static int bl_min = 60;
-module_param(bl_min, int, 0644);
-
 static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	u32 bl_lvl)
 {
@@ -775,6 +795,12 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_UCI
+	if (!listener_added) {
+		uci_add_user_listener(uci_user_listener);
+		listener_added = true;
+	}
+#endif
 	pr_err("[Display] request bl=%d\n", bl_lvl);
 
 	/* ASUS BSP DP, bl for station +++ */
@@ -786,100 +812,37 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	/* ASUS BSP DP, bl for station --- */
 
 	bl_lvl = asus_display_convert_backlight(panel, bl_lvl);
+#ifdef CONFIG_UCI
+	last_brightness= lastBL;
+	first_brightness_set = true;
+	if (g_panel == NULL) g_panel = panel;
 
+	if (backlight_dimmer) {
+		if (bl_lvl <= 498) {
+			int range =  498 - 402; // 96
+			int v_dec = range - (bl_lvl - 402); // 96 - 0
+			int v_inc = bl_lvl - 402; // 0 - 96
+			int calc_added_bl_min = (backlight_min * v_dec) / range; // backlight min - 0
+			int c = calc_added_bl_min + (v_inc * 4); // backlight_min -> 96*4 (~384)
 
-	if ((bl_dimmer == true) && (bl_lvl == 771))
-		{
-		bl_lvl = 390;
+			if (c<backlight_min) c = backlight_min;
+			bl_lvl = c;
 		}
-	if ((bl_dimmer == true) && (bl_lvl == 755))
-		{
-		bl_lvl = 380;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 739))
-		{
-		bl_lvl = 370;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 723))
-		{
-		bl_lvl = 360;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 707))
-		{
-		bl_lvl = 345;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 691))
-		{
-		bl_lvl = 330 ;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 675))
-		{
-		bl_lvl = 315;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 659))
-		{
-		bl_lvl = 300;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 643))
-		{
-		bl_lvl = 285;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 627))
-		{
-		bl_lvl = 270;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 611))
-		{
-		bl_lvl = 255;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 595))
-		{
-		bl_lvl = 240;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 578))
-		{
-		bl_lvl = 225;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 562))
-		{
-		bl_lvl = 210;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 546))
-		{
-		bl_lvl = 195;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 530))
-		{
-		bl_lvl = 180;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 514))
-		{
-		bl_lvl = 165;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 498))
-		{
-		bl_lvl = 150;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 482))
-		{
-		bl_lvl = 135;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 466))
-		{
-		bl_lvl = 120;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 450))
-		{
-		bl_lvl = 105;
-		}
-	if ((bl_dimmer == true) && (bl_lvl == 434))
-		{
-		bl_lvl = 90;
-		}
-	if ((bl_dimmer == true) && (bl_lvl <= 402))
-		{
-		bl_lvl = bl_min;
-		}
+/*        if (bl_lvl == 498)
+                bl_lvl = 380 ;
+        if (bl_lvl == 482)
+                bl_lvl = 300;
+        if (bl_lvl == 466)
+                bl_lvl = 200;
+        if (bl_lvl == 450)
+                bl_lvl = 100;
+        if (bl_lvl == 434)
+                bl_lvl = 50;
+        if (bl_lvl == 402)
+                bl_lvl = backlight_min;
+*/
+	}
+#endif
 
 	dsi = &panel->mipi_device;
 
@@ -4635,6 +4598,32 @@ int dsi_panel_mode_switch_to_vid(struct dsi_panel *panel)
 	return rc;
 }
 
+#ifdef CONFIG_UCI
+int force_panel_fps = 0;
+
+static void uci_user_listener(void) {
+	force_panel_fps = uci_get_user_property_int_mm("force_panel_fps", 0, 0, 4);
+        {
+                bool change = false;
+                int on = backlight_dimmer?1:0;
+                int backlight_min_curr = backlight_min;
+
+                backlight_min = uci_get_user_property_int_mm("backlight_min", backlight_min, 5, 250);
+                on = !!uci_get_user_property_int_mm("backlight_dimmer", on, 0, 1);
+
+                if (on != backlight_dimmer || backlight_min_curr != backlight_min) change = true;
+
+                backlight_dimmer = on;
+
+                if (first_brightness_set && change) {
+			if (g_panel != NULL && screen_is_on) {
+				dsi_panel_update_backlight(g_panel, last_brightness);
+                        }
+                }
+        }
+}
+#endif
+
 int dsi_panel_switch(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -4828,11 +4817,6 @@ error:
 	return rc;
 }
 
-bool dim_fps_override = true;
-module_param(dim_fps_override, bool, 0644);
-int dim_fps = 3 ;
-module_param(dim_fps, int, 0644);
-
 void sched_set_refresh_rate_walt(void);
 
 /*
@@ -4864,36 +4848,30 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 
 	mutex_lock(&panel->panel_lock);
 
+#ifdef CONFIG_UCI
 	if (type == 2)
-		{
-		if (dim_fps_override == false)
-		{
-		pr_err("DIM_FPS = 60");
+	{
+		if (force_panel_fps) {
+			if (force_panel_fps == 1) {
+				type = 1;
+			}
+			if (force_panel_fps == 2) {
+				type = 0;
+			}
+			if (force_panel_fps == 3) {
+				type = 3;
+			}
+			if (force_panel_fps == 4) {
+				type = 4;
+			}
+			printk("[cleanslate] [Display] override - set panel fps cmd, type %d\n", type);
+			pr_err("[WALT-Disp] set dim_fps_override WALT RAVG_Window\n");
+			sched_set_refresh_rate_walt();
+		}
+	}
+#endif
+	if (type == 2)
 		cmd_type = DSI_CMD_SET_60;
-		}
-		if ((dim_fps_override == true) && (dim_fps == 1))
-		{
-		pr_err("DIM_FPS = 90");
-		cmd_type = DSI_CMD_SET_90;
-		}
-		if ((dim_fps_override == true) && (dim_fps == 2))
-		{
-		pr_err("DIM_FPS = 120");
-		cmd_type = DSI_CMD_SET_120;
-		}
-		if ((dim_fps_override == true) && (dim_fps == 3))
-		{
-		pr_err("DIM_FPS = 144");
-		cmd_type = DSI_CMD_SET_144;
-		}
-		if ((dim_fps_override == true) && (dim_fps == 4))
-		{
-		pr_err("DIM_FPS = 160");
-		cmd_type = DSI_CMD_SET_160;
-		}
-		pr_err("[WALT-Disp] set dim_fps_override WALT RAVG_Window\n");
-		sched_set_refresh_rate_walt();
-		}
 	else if (type == 1)
 		{
 		cmd_type = DSI_CMD_SET_90;
