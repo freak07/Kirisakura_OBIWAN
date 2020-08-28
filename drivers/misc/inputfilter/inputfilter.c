@@ -2661,6 +2661,7 @@ static bool ts_input_filter(struct input_handle *handle,
 				&& strcmp("sec_touchscreen",handle->dev->name)
 				&& strcmp("synaptics_dsx",handle->dev->name)
 				&& strcmp("touchpanel",handle->dev->name)
+				&& strcmp("goodix_ts",handle->dev->name)
 			)
 			|| (type != EV_SYN && type != EV_MSC)) {
 			// from touchscreen SYNC and MSC events are not necessarily user inputs! only signal input if not such..
@@ -2983,6 +2984,7 @@ static int ts_input_dev_filter(struct input_dev *dev) {
 		strstr(dev->name, "nvt_touchscreen") ||
 		strstr(dev->name, "cyttsp") ||
 		strstr(dev->name, "qpnp_pon") ||
+		strstr(dev->name, "goodix_ts") ||
 		strstr(dev->name, "gpio")
 	    ) {
 		// storing static ts_device for using outside this handle context as well
@@ -3003,6 +3005,8 @@ static int ts_input_dev_filter(struct input_dev *dev) {
 		if (strstr(dev->name, "synaptics,s3320")) ts_device = dev;
 		// op8/pro
 		if (strstr(dev->name, "touchpanel")) ts_device = dev;
+		// asus
+		if (strstr(dev->name, "goodix_ts")) ts_device = dev;
 
 		return 0;
 	} else {
