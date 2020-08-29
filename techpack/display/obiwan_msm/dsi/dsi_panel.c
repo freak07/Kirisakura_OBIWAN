@@ -4617,7 +4617,12 @@ static void uci_user_listener(void) {
 
                 if (first_brightness_set && change) {
 			if (g_panel != NULL && screen_is_on) {
-				dsi_panel_update_backlight(g_panel, last_brightness);
+				if (g_panel->power_mode == SDE_MODE_DPMS_ON) {
+					if (mutex_trylock(&g_panel->panel_lock)) {
+						dsi_panel_update_backlight(g_panel, last_brightness);
+						mutex_unlock(&g_panel->panel_lock);
+					}
+				}
                         }
                 }
         }
