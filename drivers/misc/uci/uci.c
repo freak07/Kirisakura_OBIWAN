@@ -29,6 +29,8 @@
 //#define EMPTY_CALLBACKS_TORCH
 //#define EMPTY_CALLBACKS_VIB
 #define EMPTY_CALLBACKS_KCAL
+//#define EMPTY_CALLBACKS_LED_FRONT
+#define EMPTY_CALLBACKS_LED_BACK
 
 
 #ifdef CONFIG_DRM
@@ -719,6 +721,20 @@ static int fb_notifier_callback(
 // torch
 void qpnp_torch_main(int led0, int led1) {}
 EXPORT_SYMBOL(qpnp_torch_main);
+#endif
+
+#ifdef EMPTY_CALLBACKS_LED_FRONT
+// RGB leds
+void ntf_led_front_set_charge_colors(int r, int g, int b, bool blink) {}
+EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
+void ntf_led_front_release_charge(void) {}
+EXPORT_SYMBOL(ntf_led_front_release_charge);
+#endif
+#ifdef EMPTY_CALLBACKS_LED_BACK
+void ntf_led_back_set_charge_colors(int r, int g, int b, bool blink) {}
+EXPORT_SYMBOL(ntf_led_back_set_charge_colors);
+void ntf_led_back_release_charge(void) {}
+EXPORT_SYMBOL(ntf_led_back_release_charge);
 #endif
 
 #ifdef EMPTY_CALLBACKS_VIB
