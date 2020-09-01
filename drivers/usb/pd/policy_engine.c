@@ -2699,10 +2699,11 @@ static void enter_state_src_ready(struct usbpd *pd)
 	 * USB Host stack was started at PE_SRC_STARTUP but if peer
 	 * doesn't support USB communication, we can turn it off
 	 */
+	/*
 	if (pd->current_dr == DR_DFP && !pd->peer_usb_comm &&
 			!pd->in_explicit_contract)
 		stop_usb_host(pd);
-
+	*/
 	pd->in_explicit_contract = true;
 
 	if (pd->vdm_tx && !pd->sm_queued)

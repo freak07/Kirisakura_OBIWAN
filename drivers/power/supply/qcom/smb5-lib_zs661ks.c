@@ -5893,6 +5893,7 @@ bool is_INOV_triggered(void)
 #define ICL_1350mA	0x1B
 #define ICL_1500mA	0x1E
 #define ICL_1600mA	0x20
+#define ICL_1650mA	0x21
 #define ICL_1750mA	0x23
 #define ICL_2000mA	0x28
 #define ICL_2500mA	0x32
@@ -7041,7 +7042,7 @@ u8 asus_adapter_set_current(void)
 				usb_max_current = ICL_1100mA;
 			else {
 				asus_CHG_TYPE = 200;
-				usb_max_current = ICL_1750mA;
+				usb_max_current = ICL_1650mA;
 			}
 			break;
 		case OTHERS:
@@ -7321,7 +7322,7 @@ void asus_adapter_adc_work(struct work_struct *work)
 			usb_max_current = ICL_1100mA;
 		else {
 			asus_CHG_TYPE = 200;
-			usb_max_current = ICL_1750mA;
+			usb_max_current = ICL_1650mA;
 		}
 		break;
 	case OTHERS:
@@ -8030,7 +8031,7 @@ void asus_check_vbus_work(struct work_struct *work)
 				CHG_DBG_E("Couldn't set 0x1343 to 0x10 rc=%d\n", rc);
 		}
 
-		rc = asus_exclusive_vote(smbchg_dev->usb_icl_votable, ASUS_ICL_VOTER, true, 1750000);
+		rc = asus_exclusive_vote(smbchg_dev->usb_icl_votable, ASUS_ICL_VOTER, true, 1650000);
 		if (rc < 0)
 			CHG_DBG_E("Failed to set USBIN_CURRENT_LIMIT to 500mA\n");
 	}
@@ -9006,7 +9007,7 @@ static void smblib_handle_hvdcp_3p0_auth_done(struct smb_charger *chg,
 		CHG_DBG("Fix HVDCP3 sign, and reset HVDCP_FLAG\n");
 		HVDCP_FLAG = 3;
 		if (ASUS_ADAPTER_ID == ASUS_200K) {
-			asus_set_icl = ICL_1750mA;		
+			asus_set_icl = ICL_1650mA;		
 			asus_CHG_TYPE = 200;
 		} else {
 			asus_set_icl = ICL_1600mA;
