@@ -27,6 +27,7 @@ static int init_done = 0;
 static bool in_call = false;
 static bool charging = false;
 static int last_charge_level = 0;
+static bool blinking = false;
 
 
 bool rgb_pulse = false;
@@ -39,13 +40,13 @@ int rgb_batt_colored_lvl2 = 70;
 bool rgb_pulse_blink_on_charger = false;
 int rgb_pulse_blink_on_charger_red_limit = 70;
 
-extern void ntf_led_front_set_charge_colors(int r, int g, int b, bool blink);
+extern void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink);
 extern ntf_led_front_release_charge(void);
 
-extern void ntf_led_back_set_charge_colors(int r, int g, int b, bool blink);
+extern void ntf_led_back_set_charge_colors(int r, int g, int b, bool warp, bool blink);
 extern ntf_led_back_release_charge(void);
 
-void set_led_charge_colors(int level) {
+void set_led_charge_colors(int level, bool blink) {
 	if (rgb_batt_colored) {
 
         static int last_level = 0;
@@ -99,10 +100,20 @@ void set_led_charge_colors(int level) {
                 pr_info("%s color transition at full strength: red %d green %d \n",__func__, red_coeff, green_coeff);
         }
 
-	ntf_led_front_set_charge_colors(red_coeff, green_coeff, 0, level==100);
+	ntf_led_front_set_charge_colors(red_coeff, green_coeff, 0, level==100, blinking);
 	}
 }
 
+void set_led_blink(bool b) {
+	if (rgb_pulse_blink_on_charger || !b) {
+		blinking = b;
+	}
+	if (rgb_pulse_blink_on_charger) {
+		if (charging) {
+			set_led_charge_colors(last_charge_level,blinking);
+		}
+	}
+}
 
 #ifdef CONFIG_UCI_NOTIFICATIONS
 static void ntf_listener(char* event, int num_param, char* str_param) {
@@ -115,8 +126,10 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 		if (new_charging != charging) {
 			if (new_charging) {
 				// set leds
-				set_led_charge_colors(last_charge_level);
+				blinking = false; // reset blinking upon connection, can mix up things if not
+				set_led_charge_colors(last_charge_level,blinking);
 			} else {
+				blinking = false;
 				ntf_led_front_release_charge();
 				ntf_led_back_release_charge();
 			}
@@ -127,8 +140,9 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 		last_charge_level = num_param;
 		if (charging) {
 			// calculate and set RG(b)
-			set_led_charge_colors(last_charge_level);
+			set_led_charge_colors(last_charge_level,blinking);
 		} else {
+			blinking = false;
 			ntf_led_front_release_charge();
 			ntf_led_back_release_charge();
 		}
@@ -139,39 +153,22 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 			// notif started
 			if (!ntf_is_screen_on() || !ntf_wake_by_user())
 			{
-				if (str_param && !strcmp(str_param,NTF_EVENT_NOTIFICATION_ARG_HAPTIC)) {
-//					flash_blink(true); // haptic feedback based detection...
-				} else {
-//					flash_blink(false);
-				}
+				set_led_blink(true);
 			}
 		} else {
 			// notif over
-//			flash_stop_blink();
+			set_led_blink(false);
 		}
 	}
 	if (!strcmp(event,NTF_EVENT_WAKE_BY_USER)) { // SCREEN ON BY USER
-//		flash_stop_blink();
+		set_led_blink(false);
 	}
 	if (!strcmp(event,NTF_EVENT_LOCKED) && !num_param) { // UNLOCKED / faceunlock
-//		flash_stop_blink();
+		set_led_blink(false);
 	}
 	if (!strcmp(event,NTF_EVENT_INPUT)) { // INPUT
 		if (ntf_wake_by_user()) {
-//			flash_stop_blink();
-		}
-	}
-	if (!strcmp(event,NTF_EVENT_RINGING)) {
-		if (num_param) {
-//			flash_blink(true);
-		} else {
-//			flash_stop_blink();
-		}
-	}
-	if (!strcmp(event,NTF_EVENT_IN_CALL)) { // call started
-		in_call = !!num_param;
-		if (in_call) {
-//			flash_stop_blink(); // stop flash/vib reminder
+			set_led_blink(false);
 		}
 	}
 

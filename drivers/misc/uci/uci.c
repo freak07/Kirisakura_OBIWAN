@@ -725,13 +725,13 @@ EXPORT_SYMBOL(qpnp_torch_main);
 
 #ifdef EMPTY_CALLBACKS_LED_FRONT
 // RGB leds
-void ntf_led_front_set_charge_colors(int r, int g, int b, bool blink) {}
+void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink) {}
 EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
 void ntf_led_front_release_charge(void) {}
 EXPORT_SYMBOL(ntf_led_front_release_charge);
 #endif
 #ifdef EMPTY_CALLBACKS_LED_BACK
-void ntf_led_back_set_charge_colors(int r, int g, int b, bool blink) {}
+void ntf_led_back_set_charge_colors(int r, int g, int b, bool warp, bool blink) {}
 EXPORT_SYMBOL(ntf_led_back_set_charge_colors);
 void ntf_led_back_release_charge(void) {}
 EXPORT_SYMBOL(ntf_led_back_release_charge);

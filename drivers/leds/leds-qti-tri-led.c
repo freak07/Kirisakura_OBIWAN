@@ -487,7 +487,8 @@ static int qpnp_tri_led_hw_init(struct qpnp_tri_led_chip *chip)
 struct qpnp_led_dev *g_red;
 struct qpnp_led_dev *g_green;
 
-void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness) {
+void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink) {
+	if (!blink) {
 	int rc = 0;
 
 	mutex_lock(&led->lock);
@@ -514,14 +515,57 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness) {
 				led->label, rc);
 
 	mutex_unlock(&led->lock);
+	} else {
+	unsigned long on_ms = 1200;
+	unsigned long off_ms = 300;
+
+	int rc = 0;
+
+	mutex_lock(&led->lock);
+	if (led->blinking && on_ms == led->led_setting.on_ms &&
+			off_ms == led->led_setting.off_ms) {
+		dev_dbg(led->chip->dev, "Ignore, on/off setting is not changed: on %lums, off %lums\n",
+						on_ms, off_ms);
+		mutex_unlock(&led->lock);
+		return;
+	}
+
+	if (on_ms == 0) {
+		led->led_setting.blink = false;
+		led->led_setting.breath = false;
+		led->led_setting.brightness = LED_OFF;
+	} else if (off_ms == 0) {
+		led->led_setting.blink = false;
+		led->led_setting.breath = false;
+		led->led_setting.brightness = led->cdev.brightness;
+	} else {
+		led->led_setting.on_ms = on_ms;
+		led->led_setting.off_ms = off_ms;
+		led->led_setting.blink = true;
+		led->led_setting.breath = false;
+		led->led_setting.brightness = brightness;
+	}
+
+	rc = qpnp_tri_led_set(led);
+	if (rc)
+		dev_err(led->chip->dev, "Set led failed for %s, rc=%d\n",
+				led->label, rc);
+
+	mutex_unlock(&led->lock);
+	}
+
 }
 
-void ntf_led_front_set_charge_colors(int r, int g, int b, bool blink) {
+void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink) {
 	if (g_green!=NULL && g_red!=NULL) {
 		block_for_charge_led = true;
-		ntf_led_set_brightness(g_green,g);
-		ntf_led_set_brightness(g_red,r);
-		// TODO blink
+		if (g<128) {
+			ntf_led_set_brightness(g_green,g,blink);
+			ntf_led_set_brightness(g_red,r,false);
+		} else {
+			ntf_led_set_brightness(g_green,g,false);
+			ntf_led_set_brightness(g_red,r,blink);
+		}
 	}
 }
 EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
