@@ -4314,6 +4314,7 @@ static int psy_changed(struct notifier_block *nb, unsigned long evt, void *ptr)
 	pr_info("[PD] %s: get property: typeC_mode:%d\n", __func__, typec_mode);
 
 #ifdef CONFIG_UCI_NOTIFICATIONS
+#ifndef CONFIG_MACH_ASUS_ZS661KS
 	switch (typec_mode) {
 		case POWER_SUPPLY_TYPEC_NONE:
 			if (!pd->in_pr_swap) {
@@ -4329,6 +4330,7 @@ static int psy_changed(struct notifier_block *nb, unsigned long evt, void *ptr)
 		default:
 		break;
 	}
+#endif
 #endif
 	ret = power_supply_get_property(pd->usb_psy,
 			POWER_SUPPLY_PROP_PE_START, &val);
