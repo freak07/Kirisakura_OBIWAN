@@ -28,6 +28,10 @@
 #include "../../../usb/pd/usbpd.h"
 //ASUS BSP add include files ---
 
+#ifdef CONFIG_UCI_NOTIFICATIONS
+#include <linux/notification/notification.h>
+#endif
+
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
 		__func__, ##__VA_ARGS__)	\
@@ -2618,7 +2622,13 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 		CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
 		break;
 	}
-
+#ifdef CONFIG_UCI_NOTIFICATIONS
+	if (val->intval == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		ntf_set_charge_state(false);
+	} else {
+		ntf_set_charge_state(true);
+	}
+#endif
 	if (is_charging_paused(chg)) {
 		val->intval = POWER_SUPPLY_STATUS_CHARGING;
 		return 0;
@@ -2656,6 +2666,13 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 
 	if (!stat)
 		val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+#ifdef CONFIG_UCI_NOTIFICATIONS
+	if (val->intval == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		ntf_set_charge_state(false);
+	} else {
+		ntf_set_charge_state(true);
+	}
+#endif
 
 	return 0;
 }
