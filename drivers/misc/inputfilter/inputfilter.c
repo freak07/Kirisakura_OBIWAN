@@ -27,6 +27,8 @@ MODULE_LICENSE("GPL");
 
 #ifdef CONFIG_HZ_300
 #define JIFFY_MUL 3
+#elif CONFIG_HZ_250
+#define JIFFY_MUL 2
 #else
 #define JIFFY_MUL 1
 #endif
@@ -1533,11 +1535,12 @@ static void ts_poke_emulate(struct work_struct * ts_poke_emulate_work) {
 			ts_track_event_clear(true);
 			while (y_steps-->0) {
 				if (first_steps) {
-					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, --local_slot);
-#ifndef CONFIG_IFILTER_TS_PRESSURE
+//#ifndef CONFIG_IFILTER_TS_PRESSURE
 					ts_track_event_gather(EV_KEY, BTN_TOUCH, 1);
 					ts_track_event_gather(EV_KEY, BTN_TOOL_FINGER, 1);
-#endif
+//#endif
+					ts_track_event_gather(EV_ABS, ABS_MT_SLOT, ++local_slot);
+					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, local_slot);
 					first_steps = 0;
 				} else {
 					if (!second_step_done) {
@@ -1549,12 +1552,12 @@ static void ts_poke_emulate(struct work_struct * ts_poke_emulate_work) {
 				ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 700+ (pseudo_rnd++)%2);
 				ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 1000+y_diff);
 				y_diff += y_delta;
-#ifdef CONFIG_IFILTER_TS_PRESSURE
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
 				ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 70+ (pseudo_rnd%2));
-#else
+//#else
 				ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MAJOR, 3+ (pseudo_rnd%2));
 				ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MINOR, 3+ (pseudo_rnd%2));
-#endif
+//#endif
 				ts_track_event_gather(EV_SYN, 0, 0);
 				ts_track_event_run();
 				udelay(5 * swipe_step_wait_time_mul);
@@ -1574,10 +1577,10 @@ static void ts_poke_emulate(struct work_struct * ts_poke_emulate_work) {
 			{
 				ts_track_event_clear(true);
 			}
-#ifndef CONFIG_IFILTER_TS_PRESSURE
+//#ifndef CONFIG_IFILTER_TS_PRESSURE
 			ts_track_event_gather(EV_KEY, BTN_TOUCH, 0);
 			ts_track_event_gather(EV_KEY, BTN_TOOL_FINGER, 0);
-#endif
+//#endif
 			ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, -1);
 			ts_track_event_gather(EV_SYN, 0, 0);
 			ts_track_event_run();
@@ -1598,9 +1601,9 @@ static void ts_poke_emulate(struct work_struct * ts_poke_emulate_work) {
 					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, highest_mt_slot+1);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 0);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 0);
-#ifdef CONFIG_IFILTER_TS_PRESSURE
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
 					ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 40);
-#endif
+//#endif
 					ts_track_event_gather(EV_SYN, 0, 0);
 					ts_track_event_run();
 					while(!ts_track_event_complete()) {
@@ -1626,9 +1629,9 @@ static void ts_poke_emulate(struct work_struct * ts_poke_emulate_work) {
 					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, highest_mt_slot);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 1);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 1);
-#ifdef CONFIG_IFILTER_TS_PRESSURE
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
 					ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 41);
-#endif
+//#endif
 					ts_track_event_gather(EV_SYN, 0, 0);
 					ts_track_event_run();
 					while(!ts_track_event_complete()) {
@@ -1762,15 +1765,28 @@ static void ts_scroll_emulate(int down, int full) {
 	}
 	while (--rounds>=0) {
 		y_diff = down?300:0;
+#if 0
 		y_delta = down?-3:3;
 		y_steps = full>0?70:(full==0?50:50);
+#endif
+#if 1
+		y_delta = down?-5:5;
+		y_steps = full>0?45:(full==0?30:30);
+#endif
 		pr_info("%s ts_input ######### squeeze emulation started ######### rounds %d \n",__func__, rounds);
 
 		// speedy swipe for doubled rounds...
 		if (double_swipe) {
+#if 0
 			y_delta = down?-5:5; // bigger delta for speed
 			y_steps = 160; // fewer steps, to not run out of screen
 			swipe_step_wait_time_mul = 300 - ( (( (SWIPE_ACCELERATED_TIME_LIMIT/JIFFY_MUL) - (last_scroll_time_diff/JIFFY_MUL))*2)/1 ); // 300 - 0
+#endif
+#if 1
+			y_delta = down?-5:5; // bigger delta for speed
+			y_steps = 130; // fewer steps, to not run out of screen
+			swipe_step_wait_time_mul = 200 - ( (( (SWIPE_ACCELERATED_TIME_LIMIT/JIFFY_MUL) - (last_scroll_time_diff/JIFFY_MUL)))/1 ); // 150 - 0
+#endif
 			if (swipe_step_wait_time_mul > 85) last_swipe_very_quick = 0;
 			if (!last_swipe_very_quick && swipe_step_wait_time_mul < 85) last_swipe_very_quick = 1;
 			if (last_swipe_very_quick && swipe_step_wait_time_mul < 85) swipe_step_wait_time_mul = (swipe_step_wait_time_mul*2)/3; // speed up on the extreme of fast value multiplier < 80, divide it
@@ -1796,8 +1812,9 @@ static void ts_scroll_emulate(int down, int full) {
 
 		// TODO how to determine portrait/landscape mode? currently only portrait
 
-#if 1
-		// to avoid skips, make X times larger steps...
+#if 0
+		// to avoid skips, make X times larger steps... 
+			//-> use this with higher resolution, not for 1080p screens
 		y_steps = y_steps / 2;
 		y_delta = y_delta * 2;
 		swipe_step_wait_time_mul = swipe_step_wait_time_mul * 2;
@@ -1813,11 +1830,15 @@ static void ts_scroll_emulate(int down, int full) {
 			ts_track_event_clear(true);
 			while (y_steps-->0) {
 				if (first_steps) {
-					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, --local_slot);
-#ifndef CONFIG_IFILTER_TS_PRESSURE
+//#ifndef CONFIG_IFILTER_TS_PRESSURE
 					ts_track_event_gather(EV_KEY, BTN_TOUCH, 1);
+#if 0
+// rog3 not
 					ts_track_event_gather(EV_KEY, BTN_TOOL_FINGER, 1);
 #endif
+//#endif
+					ts_track_event_gather(EV_ABS, ABS_MT_SLOT, ++local_slot);
+					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, local_slot);
 					first_steps = 0;
 				} else {
 					if (!second_step_done) {
@@ -1826,15 +1847,24 @@ static void ts_scroll_emulate(int down, int full) {
 					}
 					ts_track_event_clear(false);
 				}
+#if 0
 				ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 800+ (pseudo_rnd++)%6);
+#endif
+#if 1
+// 1080p
+				ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 540+ (pseudo_rnd++)%6);
+#endif
 				ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 1000+y_diff);
 				y_diff += y_delta;
-#ifdef CONFIG_IFILTER_TS_PRESSURE
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
 				ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 70+ (pseudo_rnd%2));
-#else
+//#else
 				ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MAJOR, 3+ (pseudo_rnd%2));
+#if 0
+// rog3 not
 				ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MINOR, 3+ (pseudo_rnd%2));
 #endif
+//#endif
 				ts_track_event_gather(EV_SYN, 0, 0);
 				ts_track_event_run();
 				usleep_range(5 * swipe_step_wait_time_mul , (5 * swipe_step_wait_time_mul) + 1);
@@ -1854,10 +1884,13 @@ static void ts_scroll_emulate(int down, int full) {
 			{
 				ts_track_event_clear(true);
 			}
-#ifndef CONFIG_IFILTER_TS_PRESSURE
+//#ifndef CONFIG_IFILTER_TS_PRESSURE
 			ts_track_event_gather(EV_KEY, BTN_TOUCH, 0);
+#if 0
+// rog3 not
 			ts_track_event_gather(EV_KEY, BTN_TOOL_FINGER, 0);
 #endif
+//#endif
 			ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, -1);
 			ts_track_event_gather(EV_SYN, 0, 0);
 			ts_track_event_run();
@@ -1878,9 +1911,9 @@ static void ts_scroll_emulate(int down, int full) {
 					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, highest_mt_slot+1);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 0);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 0);
-#ifdef CONFIG_IFILTER_TS_PRESSURE
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
 					ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 40);
-#endif
+//#endif
 					ts_track_event_gather(EV_SYN, 0, 0);
 					ts_track_event_run();
 					while(!ts_track_event_complete()) {
@@ -1906,9 +1939,9 @@ static void ts_scroll_emulate(int down, int full) {
 					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, highest_mt_slot);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_X, 1);
 					ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 1);
-#ifdef CONFIG_IFILTER_TS_PRESSURE
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
 					ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 41);
-#endif
+//#endif
 					ts_track_event_gather(EV_SYN, 0, 0);
 					ts_track_event_run();
 					while(!ts_track_event_complete()) {
@@ -1981,7 +2014,7 @@ static void squeeze_swipe_short_trigger(void) {
 //#define MAX_SQUEEZE_TIME 35 * JIFFY_MUL // U12 change 35->38
 #define MAX_SQUEEZE_TIME 39 * JIFFY_MUL // pixel 4
 //#define MAX_SQUEEZE_TIME_LONG 69 * JIFFY_MUL
-#define MAX_SQUEEZE_TIME_LONG 72 * JIFFY_MUL // pixel 4
+#define MAX_SQUEEZE_TIME_LONG 70 * JIFFY_MUL // rog3 70
 #define MAX_NANOHUB_EVENT_TIME 4 * JIFFY_MUL
 static unsigned long longcount_start = 0;
 static int interrupt_longcount = 0;
@@ -1989,13 +2022,13 @@ static int longcount_finished = 0;
 static void squeeze_longcount(struct work_struct * squeeze_longcount_work) {
 	while (1) {
 		if (interrupt_longcount) {
-			return;
 			pr_info("%s squeeze call || longcount interrupted\n",__func__);
+			return;
 		}
 		if (jiffies - longcount_start > MAX_SQUEEZE_TIME) {
 			pr_info("%s squeeze call || longcount VIBRATION !! \n",__func__);
 			longcount_finished = 1;
-			if (get_squeeze_long_vibration() && screen_on) {
+			if (get_squeeze_long_vibration()) {// && screen_on) {
 				squeeze_vib();
 			}
 			return;
@@ -2170,6 +2203,7 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 	unsigned int diff = jiffies - last_screen_event_timestamp;
 	// time passed since last nanohub driver based spurious squeeze wake event detection
 	unsigned int nanohub_diff = jiffies - last_nanohub_spurious_squeeze_timestamp;
+
 	pr_info("%s squeeze call ts %u diff %u nh_diff %u vibration %d num_param %d \n", __func__, (unsigned int)timestamp,diff,nanohub_diff,vibration, num_param);
 	if (!squeeze_kernel_handled) return;
 
@@ -2182,62 +2216,13 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 
 	pr_info("%s squeeze call ++ START STAGE : %d\n",__func__,stage);
 	if (stage == STAGE_INIT) {
-		if (!vibration) {
-			stage = STAGE_FIRST_WL;
-			last_squeeze_timestamp = jiffies;
-		}
-
-		// if screen is off and nanohub edge wake event detected recently, trigger power button here..
-		if (!vibration && !screen_on && nanohub_diff < MAX_NANOHUB_EVENT_TIME) {
-			// catching the very rare case where nanohub squeeze detection happens
-			// while screen off and release event is detected without actual release,
-			//  and one Wakelock event will be skipped... but through nanohub it was detected...
-			pr_info("%s squeeze call -- spurious nanohub detection: power onoff endstage: %d\n",__func__,stage);
-			stage = STAGE_INIT;
-			last_nanohub_spurious_squeeze_timestamp = 0;
-			wait_for_squeeze_power = 1; // pwr trigger should be canceled if right after squeeze happens a power setting
-			// ..that would mean user is on the settings screen and calibrating.
-			ntf_input_event(__func__,"");
-			if (!screen_on && get_squeeze_peek()) {
-				last_screen_event_timestamp = jiffies;
-				start_kad_running(KAD_FOR_SQUEEZE);
-				squeeze_peekmode_trigger();
-			}
-			if (screen_on && squeeze_peek_wait) { // checking if short squeeze happening while peeking the screen with squeeze2peek...
-				bool poke = kad_kcal_overlay_on;
-				last_screen_event_timestamp = jiffies;
-				stop_kad_running(true,__func__);
-				if (poke) {
-					ts_poke();
-				}
-			} else {
-				if (screen_on && get_squeeze_swipe()) {
-					squeeze_swipe_trigger();
-				} else {
-					last_screen_event_timestamp = jiffies;
-					ifilter_pwrtrigger(0,0,__func__); // SCREEN ON
-				}
-			}
-			return;
-		}
 #if 1 
-// htc u12 special vibration pattern call is sure to be of edge squeeze!
-		if (!screen_on && vibration) {
+		if (vibration) {
 			pr_info("%s squeeze call -- vibration in INIT phase, skipping to next stage, setting last squeeze timestamp... : %d\n",__func__,stage);
 			// skip to wakelock stage right now
 			stage = STAGE_FIRST_WL;
 			last_squeeze_timestamp = jiffies;
 		} else
-#endif
-#if 1
-// pixel 4, vibration when screen is on
-		// also check for interrupting touch events! if touch going on, vibrations can happen without squeeze
-		if (screen_on && vibration && num_param == IF_EVENT_SQUEEZE_VIB_START && !recent_touch()) {
-			pr_info("%s squeeze call -- pixel 4 | vibration in INIT phase, skipping to next stage, setting last squeeze timestamp... : %d\n",__func__,stage);
-			// skip to wakelock stage right now
-			stage = STAGE_FIRST_WL;
-			last_squeeze_timestamp = jiffies;
-		} else 
 		{
 #endif
 		pr_info("%s squeeze call -- END STAGE : %d\n",__func__,stage);
@@ -2249,52 +2234,8 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 	diff = jiffies - last_squeeze_timestamp;
 	pr_info("%s squeeze call ++ squeeze diff : %u\n",__func__,diff);
 
-#if 1
-// pixel4
-	if (stage == STAGE_VIB && screen_on && vibration && num_param==IF_EVENT_SQUEEZE_VIB_START && !recent_touch()) {
-		pr_info("%s squeeze call -- pixel 4 | vibration in VIB phase, skipping back to WL stage, setting last squeeze timestamp... : %d\n",__func__,stage);
-		stage = STAGE_FIRST_WL;
-		last_squeeze_timestamp = jiffies;
-		diff = 0;
-	}
-#endif // pixel4
-
 	if (stage == STAGE_FIRST_WL) {
 		if (vibration && diff <= 15 * JIFFY_MUL) { // changing 5 -> 15 on u12+, wake can be slower before vibration is actually done after wakelock...
-
-			// if screen is off and nanohub edge wake event detected recently, trigger power button here..
-			if (!screen_on && nanohub_diff < MAX_NANOHUB_EVENT_TIME) {
-				// catching the very rare case where nanohub squeeze detection happens
-				// while screen off and release event is detected without actual release,
-				//  and one Wakelock event will be skipped... but through nanohub it was detected...
-				pr_info("%s squeeze call -- stage WL -- spurious nanohub detection: power onoff endstage: %d\n",__func__,stage);
-				stage = STAGE_INIT;
-				last_nanohub_spurious_squeeze_timestamp = 0;
-				wait_for_squeeze_power = 1; // pwr trigger should be canceled if right after squeeze happens a power setting
-				// ..that would mean user is on the settings screen and calibrating.
-				ntf_input_event(__func__,"");
-				if (!screen_on && get_squeeze_peek()) {
-					last_screen_event_timestamp = jiffies;
-					start_kad_running(KAD_FOR_SQUEEZE);
-					squeeze_peekmode_trigger();
-				}
-				if (screen_on && squeeze_peek_wait) { // screen on and squeeze peek going on?
-					bool poke = kad_kcal_overlay_on;
-					last_screen_event_timestamp = jiffies;
-					stop_kad_running(true,__func__);
-					if (poke) {
-						ts_poke();
-					}
-				} else {
-					if (screen_on && get_squeeze_swipe()) {
-						squeeze_swipe_trigger();
-					} else {
-						last_screen_event_timestamp = jiffies;
-						ifilter_pwrtrigger(0,0,__func__); // SCREEN ON
-					}
-				}
-				return;
-			}
 
 			stage = STAGE_VIB;
 			// start longcount trigger
@@ -2327,13 +2268,7 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 		stage = STAGE_INIT;
 		// interrupt longcount
 		interrupt_longcount = 1;
-#if 1
-// pixel 4
-		if (vibration && num_param!=IF_EVENT_SQUEEZE_VIB_END && !recent_touch()) { // not proper end vibration time
-		// ...also check for interrupting touch events!
-#elif
 		if (vibration) {
-#endif
 			pr_info("%s squeeze call -- exiting because vibration endstage: %d\n",__func__,stage);
 			return;
 		} else if ( (diff<=MAX_SQUEEZE_TIME) || (screen_on && !longcount_finished) ) {
@@ -2368,7 +2303,6 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 				}
 			}
 		} else if (!screen_on && diff>MAX_SQUEEZE_TIME && diff<=MAX_SQUEEZE_TIME_LONG && get_squeeze_peek()) {
-			// if peek mode is on, and between long squeeze and short squeeze, peek
 			pr_info("%s squeeze call -- power onoff endstage PEEK MODE - full wake! %d\n",__func__,stage);
 			last_screen_event_timestamp = jiffies;
 			wait_for_squeeze_power = 1; // pwr trigger should be canceled if right after squeeze happens a power setting
@@ -2778,7 +2712,7 @@ static bool ts_input_filter(struct input_handle *handle,
 			pr_info("%s ts_input filtering ts input while emulated scroll! %d %d %d\n",__func__,type,code,value);
 			return true;
 		} else {
-//			pr_info("%s ts_input LETTING THROUGH ts input while emulated scroll! %d %d %d -- finger_counter %d -- ts_emulated_events yet: %d \n",__func__,type,code,value,finger_counter, ts_emulated_events_in_progress);
+			//pr_info("%s ts_input LETTING THROUGH ts input while emulated scroll! %d %d %d -- finger_counter %d -- ts_emulated_events yet: %d \n",__func__,type,code,value,finger_counter, ts_emulated_events_in_progress);
 		}
 	} else 
 	{
@@ -2984,7 +2918,7 @@ static int ts_input_dev_filter(struct input_dev *dev) {
 		strstr(dev->name, "nvt_touchscreen") ||
 		strstr(dev->name, "cyttsp") ||
 		strstr(dev->name, "qpnp_pon") ||
-		strstr(dev->name, "goodix_ts") ||
+		strcmp(dev->name, "goodix_ts")==0 ||
 		strstr(dev->name, "gpio")
 	    ) {
 		// storing static ts_device for using outside this handle context as well
@@ -3006,7 +2940,7 @@ static int ts_input_dev_filter(struct input_dev *dev) {
 		// op8/pro
 		if (strstr(dev->name, "touchpanel")) ts_device = dev;
 		// asus
-		if (strstr(dev->name, "goodix_ts")) ts_device = dev;
+		if (strcmp(dev->name, "goodix_ts")==0) ts_device = dev;
 
 		return 0;
 	} else {
