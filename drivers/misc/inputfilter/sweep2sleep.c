@@ -879,7 +879,7 @@ static int input_dev_filter(struct input_dev *dev) {
 /*	if (strstr(dev->name, "qpnp_pon")) {
 		sweep2sleep_pwrdev = dev;
 	}*/
-	if (strstr(dev->name, "goodix_ts")) {
+	if (strcmp(dev->name, "goodix_ts")==0) {
 		return 0;
 	} else
 	if (strstr(dev->name, "synaptics,s3320")) {
