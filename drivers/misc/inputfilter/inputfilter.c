@@ -1718,6 +1718,7 @@ static void ts_scroll_emulate(int down, int full) {
 	int y_diff;
 	int y_delta;
 	int y_steps; // tune this for optimal page size of scrolling
+	int y_pressure;
 	int rounds = 1;
 	int i = 0;
 	int allow_speedup_next = full?1:0;
@@ -1770,8 +1771,11 @@ static void ts_scroll_emulate(int down, int full) {
 		y_steps = full>0?70:(full==0?50:50);
 #endif
 #if 1
-		y_delta = down?-5:5;
-		y_steps = full>0?45:(full==0?30:30);
+//		y_delta = down?-7:7;
+		y_delta = down?-6:6;
+		if (full<=0) y_delta = y_delta / 2;
+		y_steps = full>0?18:(full==0?18:18);
+		y_pressure = 110;
 #endif
 		pr_info("%s ts_input ######### squeeze emulation started ######### rounds %d \n",__func__, rounds);
 
@@ -1783,24 +1787,35 @@ static void ts_scroll_emulate(int down, int full) {
 			swipe_step_wait_time_mul = 300 - ( (( (SWIPE_ACCELERATED_TIME_LIMIT/JIFFY_MUL) - (last_scroll_time_diff/JIFFY_MUL))*2)/1 ); // 300 - 0
 #endif
 #if 1
-			y_delta = down?-5:5; // bigger delta for speed
-			y_steps = 130; // fewer steps, to not run out of screen
+			y_delta = down?-11:11; // bigger delta for speed
+			y_steps = 12; // fewer steps, to not run out of screen
+
+			if (last_scroll_time_diff > SWIPE_ACCELERATED_TIME_LIMIT / 2) last_scroll_time_diff = (last_scroll_time_diff * 5) / 3;
+			if (last_scroll_time_diff > (SWIPE_ACCELERATED_TIME_LIMIT *4) / 3) last_scroll_time_diff = (last_scroll_time_diff * 8) / 4;
+
 			swipe_step_wait_time_mul = 200 - ( (( (SWIPE_ACCELERATED_TIME_LIMIT/JIFFY_MUL) - (last_scroll_time_diff/JIFFY_MUL)))/1 ); // 150 - 0
+			y_pressure = 90 + (20 * last_scroll_time_diff) / SWIPE_ACCELERATED_TIME_LIMIT;
 #endif
 			if (swipe_step_wait_time_mul > 85) last_swipe_very_quick = 0;
 			if (!last_swipe_very_quick && swipe_step_wait_time_mul < 85) last_swipe_very_quick = 1;
+#if 0
 			if (last_swipe_very_quick && swipe_step_wait_time_mul < 85) swipe_step_wait_time_mul = (swipe_step_wait_time_mul*2)/3; // speed up on the extreme of fast value multiplier < 80, divide it
-			pr_info("%s ts_input ######### squeeze emulation SPEED %d \n",__func__, swipe_step_wait_time_mul);
+#endif
+#if 1
+			if (last_swipe_very_quick && swipe_step_wait_time_mul < 85) swipe_step_wait_time_mul = (swipe_step_wait_time_mul*4)/5; // speed up on the extreme of fast value multiplier < 80, divide it
+			if (last_swipe_very_quick && swipe_step_wait_time_mul < 85) y_pressure = (y_pressure *2)/3;
+#endif
+			pr_info("%s ts_input ######### squeeze emulation - double swipe - SPEED %d \n",__func__, swipe_step_wait_time_mul);
 			if (swipe_step_wait_time_mul > 300) swipe_step_wait_time_mul = 300; // to avoid concurrency problem with last_scroll_time_diff
 			if (swipe_step_wait_time_mul < 0) swipe_step_wait_time_mul = 0;
 
 
 		} else {
 			if (full>0) {
-				swipe_step_wait_time_mul = 110;
+				swipe_step_wait_time_mul = 210;
 			} else {
 				if (full==0) {
-					swipe_step_wait_time_mul = 170;
+					swipe_step_wait_time_mul = 200;
 				} else {
 					swipe_step_wait_time_mul = 250;
 				}
@@ -1826,6 +1841,7 @@ static void ts_scroll_emulate(int down, int full) {
 			int second_step_done = 0;
 			unsigned long start_time = jiffies;
 			unsigned int diff_time = 0;
+			int step_count = 0;
 			pr_info("ifilter %s ts DOWN 1 \n",__func__);
 			ts_track_event_clear(true);
 			while (y_steps-->0) {
@@ -1837,8 +1853,17 @@ static void ts_scroll_emulate(int down, int full) {
 					ts_track_event_gather(EV_KEY, BTN_TOOL_FINGER, 1);
 #endif
 //#endif
-					ts_track_event_gather(EV_ABS, ABS_MT_SLOT, ++local_slot);
+					ts_track_event_gather(EV_ABS, ABS_MT_SLOT, --local_slot);
 					ts_track_event_gather(EV_ABS, ABS_MT_TRACKING_ID, local_slot);
+//#ifdef CONFIG_IFILTER_TS_PRESSURE
+					ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, y_pressure+ (pseudo_rnd%2));
+//#else
+					ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MAJOR, y_pressure + (pseudo_rnd%2));
+#if 0
+// rog3 not
+					ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MINOR, 3+ (pseudo_rnd%2));
+#endif
+//#endif
 					first_steps = 0;
 				} else {
 					if (!second_step_done) {
@@ -1856,18 +1881,19 @@ static void ts_scroll_emulate(int down, int full) {
 #endif
 				ts_track_event_gather(EV_ABS, ABS_MT_POSITION_Y, 1000+y_diff);
 				y_diff += y_delta;
-//#ifdef CONFIG_IFILTER_TS_PRESSURE
-				ts_track_event_gather(EV_ABS, ABS_MT_PRESSURE, 70+ (pseudo_rnd%2));
-//#else
-				ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MAJOR, 3+ (pseudo_rnd%2));
-#if 0
-// rog3 not
-				ts_track_event_gather(EV_ABS, ABS_MT_TOUCH_MINOR, 3+ (pseudo_rnd%2));
-#endif
-//#endif
+				if (step_count++<2) {
+					y_diff -= 1;
+				}
+
 				ts_track_event_gather(EV_SYN, 0, 0);
 				ts_track_event_run();
-				usleep_range(5 * swipe_step_wait_time_mul , (5 * swipe_step_wait_time_mul) + 1);
+
+				if (step_count<2) {
+					usleep_range(2 * swipe_step_wait_time_mul , (2 * swipe_step_wait_time_mul) + 1);
+				} else {
+					usleep_range(5 * swipe_step_wait_time_mul , (5 * swipe_step_wait_time_mul) + 1);
+				}
+
 				if (y_steps%10==0) {
 					pr_info("%s ts_input squeeze emulation step = %d POS_Y = %d \n",__func__,y_steps, 1000+y_diff);
 				}
@@ -2616,8 +2642,7 @@ static bool ts_input_filter(struct input_handle *handle,
 
 
 	if (type == EV_KEY) {
-//#ifdef LOG_INPUT_EVENTS
-#if 1
+#ifdef LOG_INPUT_EVENTS
 		pr_info("%s _____ ts_input key %d %d %d\n",__func__,type,code,value);
 #endif
 		if (code == 116) {
