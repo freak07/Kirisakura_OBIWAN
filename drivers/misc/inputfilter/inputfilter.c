@@ -2324,7 +2324,7 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 					last_screen_event_timestamp = jiffies;
 					if (!screen_on || !get_squeeze_sleep_on_long()) {
 						// POWER OFF / ON
-						ifilter_pwrtrigger(0,250,__func__); // SCREEN ON if not already or OFF if screen is on and NOT squeeze sleep on long only...
+						ifilter_pwrtrigger(0,0,__func__); // SCREEN ON if not already or OFF if screen is on and NOT squeeze sleep on long only...
 					}
 				}
 			}
@@ -2356,7 +2356,7 @@ void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_pa
 				if (get_squeeze_swipe()||get_squeeze_sleep_on_long()) {
 					pr_info("%s squeeze call (after swipe or sleep_on_long -- power onoff endstage SWIPE - full sleep - swipe mode middle long gesture! %d\n",__func__,stage);
 					last_screen_event_timestamp = jiffies;
-					ifilter_pwrtrigger(0,250,__func__); // POWER OFF
+					ifilter_pwrtrigger(0,0,__func__); // POWER OFF
 					stop_kad_running(true,__func__);
 				}
 				return;
