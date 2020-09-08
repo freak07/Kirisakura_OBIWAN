@@ -239,6 +239,8 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 	}
 	dev_dbg(led->chip->dev, "PWM settings for %s led: period = %lluns, duty = %lluns\n",
 				led->cdev.name, period_ns, duty_ns);
+	pr_info("%s [cleanslate] PWM settings for %s led: period = %lluns, duty = %lluns\n", __func__,
+				led->cdev.name, period_ns, duty_ns);
 
 	led->pwm_setting.duty_ns = duty_ns;
 	led->pwm_setting.period_ns = period_ns;
@@ -491,7 +493,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 	if (!blink) {
 	int rc = 0;
 
-	mutex_lock(&led->lock);
+	if (mutex_trylock(&led->lock)) {
 	if (brightness > LED_FULL)
 		brightness = LED_FULL;
 
@@ -515,13 +517,14 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 				led->label, rc);
 
 	mutex_unlock(&led->lock);
+	}
 	} else {
 	unsigned long on_ms = 1200;
 	unsigned long off_ms = 300;
 
 	int rc = 0;
 
-	mutex_lock(&led->lock);
+	if (mutex_trylock(&led->lock)) {
 	if (led->blinking && on_ms == led->led_setting.on_ms &&
 			off_ms == led->led_setting.off_ms) {
 		dev_dbg(led->chip->dev, "Ignore, on/off setting is not changed: on %lums, off %lums\n",
@@ -552,6 +555,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 				led->label, rc);
 
 	mutex_unlock(&led->lock);
+	}
 	}
 
 }
