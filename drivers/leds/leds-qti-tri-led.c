@@ -19,6 +19,10 @@
 #include <linux/regmap.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+
 #define TRILED_REG_TYPE			0x04
 #define TRILED_REG_SUBTYPE		0x05
 #define TRILED_REG_EN_CTL		0x46
@@ -269,7 +273,8 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 	return rc;
 }
 #ifdef CONFIG_UCI
-bool block_for_charge_led = false;
+static bool block_for_charge_led = false;
+static int bln_rgb_light_level = 0;
 #endif
 
 static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
@@ -295,7 +300,11 @@ static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
 		return 0;
 	}
 
+#ifdef CONFIG_UCI
+	led->led_setting.brightness = brightness / ((bln_rgb_light_level * 2)+1);
+#else
 	led->led_setting.brightness = brightness;
+#endif
 	if (!!brightness)
 		led->led_setting.off_ms = 0;
 	else
@@ -490,7 +499,7 @@ struct qpnp_led_dev *g_red;
 struct qpnp_led_dev *g_green;
 
 void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink) {
-	if (!blink) {
+    if (!blink) {
 	int rc = 0;
 
 	if (mutex_trylock(&led->lock)) {
@@ -503,7 +512,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 		return;
 	}
 
-	led->led_setting.brightness = brightness;
+	led->led_setting.brightness = brightness / ((bln_rgb_light_level * 2)+1);
 	if (!!brightness)
 		led->led_setting.off_ms = 0;
 	else
@@ -518,7 +527,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 
 	mutex_unlock(&led->lock);
 	}
-	} else {
+    } else {
 	unsigned long on_ms = 1200;
 	unsigned long off_ms = 300;
 
@@ -533,21 +542,10 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 		return;
 	}
 
-	if (on_ms == 0) {
-		led->led_setting.blink = false;
-		led->led_setting.breath = false;
-		led->led_setting.brightness = LED_OFF;
-	} else if (off_ms == 0) {
-		led->led_setting.blink = false;
-		led->led_setting.breath = false;
-		led->led_setting.brightness = led->cdev.brightness;
-	} else {
-		led->led_setting.on_ms = on_ms;
-		led->led_setting.off_ms = off_ms;
-		led->led_setting.blink = true;
-		led->led_setting.breath = false;
-		led->led_setting.brightness = brightness;
-	}
+	// on blink, use breath instead
+	led->led_setting.blink = false;
+	led->led_setting.breath = true;
+	led->led_setting.brightness = led->cdev.brightness;
 
 	rc = qpnp_tri_led_set(led);
 	if (rc)
@@ -556,7 +554,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 
 	mutex_unlock(&led->lock);
 	}
-	}
+    }
 
 }
 
@@ -677,6 +675,12 @@ static int qpnp_tri_led_parse_dt(struct qpnp_tri_led_chip *chip)
 	return rc;
 }
 
+#ifdef CONFIG_UCI
+static void uci_user_listener(void) {
+	bln_rgb_light_level = uci_get_user_property_int_mm("bln_rgb_light_level", 0, 0, 20);
+}
+#endif
+
 static int qpnp_tri_led_probe(struct platform_device *pdev)
 {
 	struct qpnp_tri_led_chip *chip;
@@ -718,6 +722,9 @@ static int qpnp_tri_led_probe(struct platform_device *pdev)
 
 	dev_dbg(chip->dev, "Tri-led module with subtype 0x%x is detected\n",
 					chip->subtype);
+#ifdef CONFIG_UCI
+        uci_add_user_listener(uci_user_listener);
+#endif
 	return 0;
 destroy:
 	mutex_destroy(&chip->bus_lock);
