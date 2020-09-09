@@ -608,10 +608,10 @@ static int qpnp_lpg_set_sdam_ramp_config(struct qpnp_lpg_channel *lpg)
 #ifdef CONFIG_UCI
 static u32 uci_lut_patterns[5][20] = {
     { 20,40,50, 70,100, 70,50,40,20,10,		0,0,0,0,0,0,0,0,0,0}, // normal
-    { 12,23,36, 50, 64, 80,90,95,100,90,	74,64,50,40,33,22,10,0,0,0}, // oneplus5
-    {100,10,100,10,100, 0, 0, 0, 0, 0,		100,10,100,10,100,0,0,0,0,0}, // triple
-    { 10, 0, 28, 0, 80, 0, 0, 0, 0, 0,		10,0,28,0,100,0,0,0,0,0}, // triple up
-    {100, 0, 28, 0, 10, 0, 0, 0, 0, 0,		80,0,28,0,10,0,0,0,0,0}}; // triple down
+    { 12,23,36, 50, 64, 80,90,95,100,95,	85,74,64,50,40,33,22,10,0,0}, // oneplus5
+    {100,10,100,10,100, 0, 0, 0, 0, 0,		50,10,50,10,50,0,0,0,0,0}, // triple
+    { 10, 0, 20, 0, 60, 0, 0, 0, 0, 0,		10,0,38,0,100,0,0,0,0,0}, // triple up
+    {100, 0, 28, 0, 10, 0, 0, 0, 0, 0,		60,0,20,0,10,0,0,0,0,0}}; // triple down
 
 static bool bln_rgb_pulse = false;
 static int bln_rgb_pulse_pattern = 0;
@@ -637,6 +637,14 @@ static void uci_user_listener(void) {
 	}
 }
 
+static bool fully_charged_pattern = false;
+
+void uci_led_set_fully_charged_pattern(bool on) {
+	fully_charged_pattern = on;
+	if (g_lpg!=NULL) qpnp_lpg_set_lut_pattern(g_lpg,NULL,20);
+}
+EXPORT_SYMBOL(uci_led_set_fully_charged_pattern);
+
 #endif
 
 static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
@@ -654,7 +662,7 @@ static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
 	if (lpg->chip->dev->of_node->full_name!=NULL && strstr(lpg->chip->dev->of_node->full_name,"qcom,pwms"))
 	{
 		if (g_lpg==NULL) g_lpg = lpg;
-		if (bln_rgb_pulse) {
+		if (bln_rgb_pulse && !fully_charged_pattern) {
 			u32 calc_pattern[20] = {20,40,50,100,60,40,20,10,0,0,0,0,0,0,0,0,0,0,0,0};
 			dev_err(lpg->chip->dev, "%s [cleanslate] new pattern length - override - dev: %s full: %s\n",__func__, lpg->chip->dev->of_node->name, lpg->chip->dev->of_node->full_name);
 			{
@@ -662,6 +670,18 @@ static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
 				for (i=0;i<20;i++) {
 					calc_pattern[i] = (uci_lut_patterns[bln_rgb_pulse_pattern][i])/((bln_rgb_light_level*2)+1);
 					pr_info("%s [cleanslate] pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		} else
+		if (fully_charged_pattern) {
+			u32 calc_pattern[20] = {10,40,60,70,80,90,100,70,40,20,0,10,30,80,90,100,70,40,20,10};
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (calc_pattern[i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] BLINK pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
 				}
 			}
 			pattern = calc_pattern;

@@ -275,6 +275,9 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 #ifdef CONFIG_UCI
 static bool block_for_charge_led = false;
 static int bln_rgb_light_level = 0;
+
+extern void uci_led_set_fully_charged_pattern(bool on);
+
 #endif
 
 static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
@@ -561,17 +564,20 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink) {
 	if (g_green!=NULL && g_red!=NULL) {
 		block_for_charge_led = true;
-		if (g<128) {
+		if (warp && !blink) {
+			uci_led_set_fully_charged_pattern(true);
+			ntf_led_set_brightness(g_green,g,false);
+			ntf_led_set_brightness(g_red,r,true);
+		} else {
+			uci_led_set_fully_charged_pattern(false);
 			ntf_led_set_brightness(g_green,g,blink);
 			ntf_led_set_brightness(g_red,r,false);
-		} else {
-			ntf_led_set_brightness(g_green,g,false);
-			ntf_led_set_brightness(g_red,r,blink);
 		}
 	}
 }
 EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
 void ntf_led_front_release_charge(void) {
+	uci_led_set_fully_charged_pattern(false);
 	block_for_charge_led = false;
 }
 EXPORT_SYMBOL(ntf_led_front_release_charge);
