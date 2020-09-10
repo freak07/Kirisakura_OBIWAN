@@ -278,6 +278,14 @@ static int bln_rgb_light_level = 0;
 
 extern void uci_led_set_fully_charged_pattern(bool on);
 
+struct qpnp_led_dev *g_red;
+struct qpnp_led_dev *g_green;
+
+unsigned long last_red_off_time = 0;
+unsigned long last_green_off_time = 0;
+
+void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink);
+
 #endif
 
 static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
@@ -289,6 +297,21 @@ static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
 
 #ifdef CONFIG_UCI
 	pr_info("%s led: %s val: %d -- blocked? %d \n",__func__,led->label,brightness, block_for_charge_led);
+
+	if (block_for_charge_led && brightness == 0) { // checks for BRI = 0...
+		if (led==g_red) last_red_off_time = jiffies;
+		if (led==g_green) last_green_off_time = jiffies;
+		{
+			unsigned int diff = last_red_off_time>last_green_off_time ? last_red_off_time - last_green_off_time : last_green_off_time - last_red_off_time;
+			pr_info("%s red/green led bri OFF diff: %u val: %d -- blocked? %d \n",__func__,diff,led->label,brightness, block_for_charge_led);
+			if (diff < 30) { // if off times very close to each other (while being blocked by UCI charge LED state), here we should not block OFF and also let this SET BRIGHTNESS happen
+				if (led==g_green) ntf_led_set_brightness(g_red,0,false);
+				if (led==g_red) ntf_led_set_brightness(g_green,0,false);
+			} else {
+				return rc;
+			}
+		}
+	}
 	// block for charging, when brightness is >0, otherwise we might block USB disconnect LED off settings from userspace.
 	if (brightness>0 && block_for_charge_led) return rc;
 #endif
@@ -498,9 +521,6 @@ static int qpnp_tri_led_hw_init(struct qpnp_tri_led_chip *chip)
 
 #ifdef CONFIG_UCI
 
-struct qpnp_led_dev *g_red;
-struct qpnp_led_dev *g_green;
-
 void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink) {
     if (!blink) {
 	int rc = 0;
@@ -548,7 +568,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 	// on blink, use breath instead
 	led->led_setting.blink = false;
 	led->led_setting.breath = true;
-	led->led_setting.brightness = led->cdev.brightness;
+	led->led_setting.brightness = brightness;//led->cdev.brightness;
 
 	rc = qpnp_tri_led_set(led);
 	if (rc)
