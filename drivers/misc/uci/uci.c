@@ -394,7 +394,6 @@ EXPORT_SYMBOL(uci_add_user_listener);
 
 void parse_uci_user_cfg_file(void) {
 	int rc = parse_uci_cfg_file(UCI_USER_FILE,false);
-	if (!rc) { user_cfg_parsed = true; should_parse_user = false; }
 	if (!rc) { 
 		int i=0;
 		user_cfg_parsed = true; should_parse_user = false; 
