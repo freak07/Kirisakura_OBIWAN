@@ -242,8 +242,6 @@ static void sweep2sleep_presspwr(struct work_struct * sweep2sleep_presspwr_work)
 	if (pause_before_pwr_off) msleep(260);
 	pause_before_pwr_off = false;
 
-	msleep(S2S_PWRKEY_DUR-20);
-
 	if (!check_no_finger(1)) {
 		set_vibrate_2(10,60);
 		screen_off_after_gesture = true;
