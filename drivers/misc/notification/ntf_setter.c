@@ -94,13 +94,15 @@ void set_led_charge_colors(int level, bool blink) {
                 }
         }
 
-        if (level == 100) { // at 100, always full GREEN
-                red_coeff = 1;
+        if (level == 100) { // at 100, always full GREEN, (except when blinking, then set coeff to 20). 
+			// Minimum is 1, to have red LED on for warping
+                red_coeff = blinking?20:1;
                 green_coeff = 255;
                 pr_info("%s color transition at full strength: red %d green %d \n",__func__, red_coeff, green_coeff);
         }
 
 	ntf_led_front_set_charge_colors(red_coeff, green_coeff, 0, level==100, blinking);
+// WARP TEST:	ntf_led_front_set_charge_colors(1, 255, 0, true, blinking);
 	}
 }
 
@@ -127,6 +129,7 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 			if (new_charging) {
 				// set leds
 				blinking = false; // reset blinking upon connection, can mix up things if not
+				charging = new_charging;
 				set_led_charge_colors(last_charge_level,blinking);
 			} else {
 				blinking = false;
