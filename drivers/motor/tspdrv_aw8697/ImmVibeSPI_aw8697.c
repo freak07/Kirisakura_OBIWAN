@@ -2692,6 +2692,7 @@ void set_vibrate_int(int num, int boost_level) {
 
 	mutex_lock(&g_aw8697->lock);
 
+
         cancel_delayed_work(&g_aw8697->gain_work);
 	aw8697_haptic_stop(g_aw8697);
 	aw8697_haptic_set_rtp_aei(g_aw8697, false);
@@ -2699,24 +2700,42 @@ void set_vibrate_int(int num, int boost_level) {
 
 	aw8697_haptic_rtp_mode_enter();
 
+
 	if (g_aw8697->amplitude > 0) {
 		aw8697_haptic_ram_vbat_comp(g_aw8697, false);
 
 		if (num>50) { // longer loop
-		aw8697_haptic_set_wav_seq(g_aw8697, 0, (unsigned char)1);
-		aw8697_haptic_set_wav_seq(g_aw8697, 1, 0);
-		aw8697_haptic_set_wav_loop(g_aw8697, 0x00,
-				   AW8697_BIT_WAVLOOP_INIFINITELY);
-		} else { // short haptic
 			aw8697_haptic_set_wav_seq(g_aw8697, 0, (unsigned char)1);
 			aw8697_haptic_set_wav_seq(g_aw8697, 1, 0);
+			aw8697_haptic_set_wav_loop(g_aw8697, 0x00,
+				   AW8697_BIT_WAVLOOP_INIFINITELY);
+			aw8697_haptic_play_wav_seq(g_aw8697, g_aw8697->amplitude);
+		} else { // short haptic
+			int curr_gain = g_aw8697->gain;
+			cancel_delayed_work(&g_aw8697->gain_work);
+			if (boost_level>=5) {
+				g_aw8697->gain = 127;
+				aw8697_haptic_set_gain(g_aw8697, g_aw8697->gain);
+				aw8697_haptic_set_wav_seq(g_aw8697, 0, (unsigned char)15); 
+			} else {
+				g_aw8697->gain = 47;
+				aw8697_haptic_set_gain(g_aw8697, g_aw8697->gain);
+				aw8697_haptic_set_wav_seq(g_aw8697, 0, (unsigned char)2);
+			}
+			aw8697_haptic_set_wav_seq(g_aw8697, 1, 0);
 			aw8697_haptic_set_wav_loop(g_aw8697, 0, 0);
+			aw8697_haptic_play_wav_seq(g_aw8697, 1);
+			mdelay(10);
+			// reset to backup gain value:
+			g_aw8697->gain = curr_gain;
+			aw8697_haptic_set_gain(g_aw8697, g_aw8697->gain);
 		}
-		aw8697_haptic_play_wav_seq(g_aw8697, g_aw8697->amplitude);
 	}
 	mutex_unlock(&g_aw8697->lock);
 
-        mdelay(num); // cannot sleep, as this can be in atomic context as well
+	if(num>50) {
+		mdelay(num); // cannot sleep, as this can be in atomic context as well
+	}
 
 // stop
 	mutex_lock(&g_aw8697->lock);
