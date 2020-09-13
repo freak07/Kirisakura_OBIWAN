@@ -32,7 +32,6 @@
 //#define EMPTY_CALLBACKS_LED_FRONT
 #define EMPTY_CALLBACKS_LED_BACK
 
-
 #ifdef CONFIG_DRM
 #include <drm/drm_panel.h>
 static struct drm_panel *active_panel;
@@ -744,6 +743,8 @@ void set_vibrate(int num) {}
 EXPORT_SYMBOL(set_vibrate);
 void set_vibrate_2(int num, int boost_level) {}
 EXPORT_SYMBOL(set_vibrate_2);
+void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
+EXPORT_SYMBOL(uci_vibration_set_in_pocket);
 #endif
 
 #ifdef EMPTY_CALLBACKS_KCAL
