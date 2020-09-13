@@ -843,8 +843,34 @@ static int aw8697_haptic_set_bst_peak_cur(struct aw8697 *aw8697,
 	return 0;
 }
 
+#ifdef CONFIG_UCI
+static int booster_percentage = 0;
+#define MAX_GAIN 175
+static bool booster_in_pocket = false;
+static bool skip_next_boosting = false;
+
+void uci_vibration_set_in_pocket(int percentage, bool in_pocket) {
+	booster_percentage = percentage;
+	booster_in_pocket = in_pocket;
+}
+EXPORT_SYMBOL(uci_vibration_set_in_pocket);
+
+static int uci_calc_gain(int gain) {
+	if (booster_in_pocket) {
+		int c = (gain * (100+booster_percentage))/100;
+		if (c>MAX_GAIN) c = MAX_GAIN;
+		return c;
+	}
+	return gain;
+}
+#endif
 static int aw8697_haptic_set_gain(struct aw8697 *aw8697, unsigned char gain)
 {
+#ifdef CONFIG_UCI
+	int calc_gain = uci_calc_gain(gain);
+	pr_info("%s set gain %u BOOST -> %u \n",__func__,gain, calc_gain);
+	gain = calc_gain;
+#endif
 	aw8697_i2c_write(aw8697, AW8697_REG_DATDBG, gain);
 	return 0;
 }
