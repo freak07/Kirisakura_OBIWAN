@@ -24,7 +24,6 @@ static DEFINE_SPINLOCK(blink_spinlock);
 
 static int init_done = 0;
 
-static bool in_call = false;
 static bool charging = false;
 static int last_charge_level = 0;
 static bool blinking = false;
@@ -45,6 +44,12 @@ extern ntf_led_front_release_charge(void);
 
 extern void ntf_led_back_set_charge_colors(int r, int g, int b, bool warp, bool blink);
 extern ntf_led_back_release_charge(void);
+
+int notification_booster_overdrive_perc = 0;
+bool boost_only_in_pocket = false;
+bool in_pocket = false;
+
+extern void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
 
 void set_led_charge_colors(int level, bool blink) {
 	if (rgb_batt_colored) {
@@ -174,7 +179,17 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 			set_led_blink(false);
 		}
 	}
-
+	if (!strcmp(event,NTF_EVENT_SLEEP)) {
+		uci_vibration_set_in_pocket( (!ntf_is_screen_on() && boost_only_in_pocket)?notification_booster_overdrive_perc:0, in_pocket);
+	}
+	if (!strcmp(event,NTF_EVENT_PROXIMITY)) { // proximity
+		if (!!num_param) {
+			in_pocket = true;
+		} else{
+			in_pocket = false;
+		}
+		uci_vibration_set_in_pocket( (!ntf_is_screen_on() && boost_only_in_pocket)?notification_booster_overdrive_perc:0, in_pocket);
+	}
 }
 #endif
 
@@ -188,6 +203,11 @@ static void uci_user_listener(void) {
         rgb_batt_colored_lvl2 = uci_get_user_property_int_mm("bln_rgb_batt_colored_lvl_2", 70, 0, 99);
         rgb_pulse_blink_on_charger = !!uci_get_user_property_int_mm("bln_rgb_pulse_blink_on_charger", 0, 0, 1);
         rgb_pulse_blink_on_charger_red_limit = uci_get_user_property_int_mm("bln_rgb_pulse_blink_on_charger_red_limit", 70, 0, 100);
+
+	notification_booster_overdrive_perc = uci_get_user_property_int_mm("notification_booster_overdrive_perc", 10, 0, 40);
+	boost_only_in_pocket = !!uci_get_user_property_int_mm("boost_only_in_pocket", 0, 0, 1);
+	uci_vibration_set_in_pocket((!ntf_is_screen_on()&&boost_only_in_pocket)?notification_booster_overdrive_perc:0, in_pocket);
+
 }
 
 static int __init ntf_setter_init_module(void)
