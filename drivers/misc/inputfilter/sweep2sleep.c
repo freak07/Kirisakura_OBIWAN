@@ -186,6 +186,7 @@ static void s2s_setup_values() {
 //#define HZ_300
 #define HZ_250
 //#define CONFIG_DEBUG_S2S
+//#define LOCKSCREEN_PWROFF_WAIT
 
 #ifdef HZ_300
 #define TIME_DIFF 15
@@ -239,7 +240,9 @@ static void sweep2sleep_presspwr(struct work_struct * sweep2sleep_presspwr_work)
 
 	// should indicate gesture cannot be done again till full screen off or unlocked
 	screen_off_after_gesture = false;
+#ifdef LOCKSCREEN_PWROFF_WAIT
 	if (pause_before_pwr_off) msleep(260);
+#endif
 	pause_before_pwr_off = false;
 
 	if (!check_no_finger(1)) {
@@ -307,6 +310,19 @@ static void store_doubletap_touch(void) {
 	last_tap_jiffies = jiffies;
 }
 
+/* reset on finger release */
+static void sweep2sleep_reset(bool reset_filter_coords) {
+	exec_count = true;
+	barrier[0] = false;
+	barrier[1] = false;
+	firstx = 0;
+	first_event = false;
+	scr_on_touch = false;
+	if (reset_filter_coords) {
+		filter_coords_status = false;
+	}
+}
+
 static void sweep2sleep_longtap_count(struct work_struct * sweep2sleep_longtap_count_work) {
 	unsigned int last_tap_time_diff = 0;
 	mutex_lock(&longtapworklock);
@@ -332,6 +348,8 @@ static void sweep2sleep_longtap_count(struct work_struct * sweep2sleep_longtap_c
 			reset_doubletap_tracking();
 			reset_longtap_tracking();
 			if (get_s2s_doubletap_mode()==1) { // power button mode - long tap -> notif down
+				touch_down_called = false;
+				sweep2sleep_reset(true); // make sure gesture tracking for sweep stops...
 				vib_power = 100;
 				schedule_work(&sweep2sleep_vib_work);
 				write_uci_out("fp_touch");
@@ -340,6 +358,7 @@ static void sweep2sleep_longtap_count(struct work_struct * sweep2sleep_longtap_c
 				if (uci_get_sys_property_int_mm("locked", 0, 0, 1)) { // if locked...
 					pause_before_pwr_off = true;
 				}
+				touch_down_called = false;
 				sweep2sleep_pwrtrigger();
 			}
 			goto exit_mutex;
@@ -352,18 +371,6 @@ exit_mutex:
 static DECLARE_WORK(sweep2sleep_longtap_count_work, sweep2sleep_longtap_count);
 
 
-/* reset on finger release */
-static void sweep2sleep_reset(bool reset_filter_coords) {
-	exec_count = true;
-	barrier[0] = false;
-	barrier[1] = false;
-	firstx = 0;
-	first_event = false;
-	scr_on_touch = false;
-	if (reset_filter_coords) {
-		filter_coords_status = false;
-	}
-}
 
 
 /* Sweep2sleep main function */
@@ -536,7 +543,7 @@ bool s2s_freeze_coords(int *x, int *y, int r_x, int r_y) {
 		int s2s_y_limit = get_s2s_y_limit();
 		int s2s_y_above = get_s2s_y_above();
 #ifdef CONFIG_DEBUG_S2S
-		pr_info("%s touch x/y gathered.\n",__func__);
+		pr_info("%s | touch x/y gathered. | filter_coords_status %d finger_counter %d timediff %u \n",__func__, filter_coords_status, finger_counter, time_diff);
 #endif
 		if (get_s2s_switch() && get_s2s_filter_mode() && !filter_coords_status && !finger_counter && time_diff>TIME_DIFF) {
 			if (
@@ -593,7 +600,7 @@ static bool __s2s_input_filter(struct input_handle *handle, unsigned int type,
 
 #ifdef CONFIG_DEBUG_S2S
 	if ((log_throttling_count++)%50>40) {
-		pr_info("%s type: %d code: %d value: %d -- max y = %d\n",__func__,type,code,value,S2S_Y_MAX);
+		pr_info("%s type: %d code: %d value: %d -- max y = %d | finger_counter %d freeze_touch: %d \n",__func__,type,code,value,S2S_Y_MAX, finger_counter, freeze_touch_area_detected);
 	}
 	if (log_throttling_count%50==49) log_throttling_count = 0;
 #endif
@@ -762,8 +769,7 @@ static bool __s2s_input_filter(struct input_handle *handle, unsigned int type,
 					if (last_tap_time_diff < LAST_TAP_TIME_DIFF_DOUBLETAP_MAX) { // previous first touch time and coordinate comparision to detect double tap...
 						if (delta_x < 60 && delta_x > -60 && delta_y < 60 && delta_y > -60) {
 							touch_down_called = false;
-							sweep2sleep_reset(false); // do not let coordinate freezing yet off, finger is on screen and gesture is still on => (false)
-							filter_coords_status = true; // set filtering on...
+							sweep2sleep_reset(true);
 							if (get_s2s_doubletap_mode()==1) { // power button mode
 								// wait a bit before actually emulate pwr button press in the trigger, to avoid wake screen on lockscreen touch
 								if (uci_get_sys_property_int_mm("locked", 0, 0, 1)) { // if locked...
