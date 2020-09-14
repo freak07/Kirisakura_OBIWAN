@@ -5644,6 +5644,7 @@ static struct i2c_driver aw8697_i2c_driver = {
 
 #ifdef CONFIG_UCI
 static bool amp_skip_send_output = false;
+static unsigned long amp_play_start = 0;
 #endif
 /*
 ** Called to disable amp (disable output force)
@@ -5659,8 +5660,13 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_AmpDisable(VibeUInt8 nActuatorIndex
     }
 #ifdef CONFIG_UCI
 	if (amp_skip_send_output) {
+		unsigned int amp_time_diff = jiffies - amp_play_start;
 		// stop wave and reset skip boolean
-		pr_info("%s -- pocket boosting - stop Wave play instead of RTP... \n",__func__);
+		pr_info("%s aw8697 -- pocket boosting - stop Wave play instead of RTP... time diff: %u \n",__func__,amp_time_diff);
+		if (amp_time_diff < msecs_to_jiffies(80)) {
+			pr_info("%s aw8697 -- pocket boosting - too short, delay a bit before stop Wave play.\n",__func__);
+			mdelay(65); // too short to notice, let's delay stop a bit...
+		}
 		set_vibrate_int(100,100,false,true); // stop wave
 		amp_skip_send_output = false;
 	} else {
@@ -5712,6 +5718,7 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_AmpEnable(VibeUInt8 nActuatorIndex)
 	if (booster_in_pocket) {
 		// play wave
 		pr_info("%s ++ pocket boosting - start Wave play instead of RTP... \n",__func__);
+		amp_play_start = jiffies;
 		set_vibrate_int(100,100,true,false); // start wave
 		amp_skip_send_output = true;
 	} else {
