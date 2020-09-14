@@ -759,10 +759,15 @@ static int aw8697_haptic_stop_delay(struct aw8697 *aw8697)
 	return 0;
 }
 
+//#define UCI_DEBUG
+
 static int aw8697_haptic_stop(struct aw8697 *aw8697)
 {
 //	if((gVibDebugLog & 0x0001)== 0x0001)
 		pr_info("%s enter\n", __func__);
+#ifdef UCI_DEBUG
+	WARN_ON(true);
+#endif
 
 	aw8697_haptic_play_go(aw8697, false);
 	aw8697_haptic_stop_delay(aw8697);
@@ -774,6 +779,9 @@ static int aw8697_haptic_stop(struct aw8697 *aw8697)
 static int aw8697_haptic_start(struct aw8697 *aw8697)
 {
 	pr_info("%s enter\n", __func__);
+#ifdef UCI_DEBUG
+	WARN_ON(true);
+#endif
 
 	aw8697_haptic_play_go(aw8697, true);
 
@@ -2706,7 +2714,7 @@ static void aw8697_haptic_brightness_set(struct led_classdev *cdev,
 #ifdef CONFIG_UCI
 static void aw8697_haptic_rtp_mode_enter(void);
 
-void set_vibrate_int(int num, int boost_level) {
+void set_vibrate_int(int num, int boost_level, bool start, bool stop) {
 
 	if (g_aw8697 == NULL) return;
 
@@ -2716,6 +2724,7 @@ void set_vibrate_int(int num, int boost_level) {
 		return;
 	g_aw8697->amplitude = boost_level;
 
+    if (start) {
 	mutex_lock(&g_aw8697->lock);
 
 
@@ -2758,30 +2767,33 @@ void set_vibrate_int(int num, int boost_level) {
 		}
 	}
 	mutex_unlock(&g_aw8697->lock);
-
+    }
+    if (start && stop) {
 	if(num>50) {
 		mdelay(num); // cannot sleep, as this can be in atomic context as well
 	}
+    }
 
+    if (stop) {
 // stop
 	mutex_lock(&g_aw8697->lock);
 	aw8697_haptic_stop(g_aw8697);
 	mutex_unlock(&g_aw8697->lock);
-
+    }
 
 }
 
 
 void set_vibrate_boosted(int num) {
-	set_vibrate_int(num, 40);
+	set_vibrate_int(num, 40, true,true);
 }
 EXPORT_SYMBOL(set_vibrate_boosted);
 void set_vibrate(int num) {
-	set_vibrate_int(num, 30);
+	set_vibrate_int(num, 30, true,true);
 }
 EXPORT_SYMBOL(set_vibrate);
 void set_vibrate_2(int num, int boost_level) {
-	set_vibrate_int(num, boost_level);
+	set_vibrate_int(num, boost_level, true,true);
 }
 EXPORT_SYMBOL(set_vibrate_2);
 #endif
@@ -5630,6 +5642,9 @@ static struct i2c_driver aw8697_i2c_driver = {
 };
 
 
+#ifdef CONFIG_UCI
+static bool amp_skip_send_output = false;
+#endif
 /*
 ** Called to disable amp (disable output force)
 */
@@ -5642,9 +5657,20 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_AmpDisable(VibeUInt8 nActuatorIndex
 	DbgOut((DBL_INFO, "%s:aw8697 exit \n", __func__));
         return VIBE_E_FAIL;
     }
+#ifdef CONFIG_UCI
+	if (amp_skip_send_output) {
+		// stop wave and reset skip boolean
+		pr_info("%s -- pocket boosting - stop Wave play instead of RTP... \n",__func__);
+		set_vibrate_int(100,100,false,true); // stop wave
+		amp_skip_send_output = false;
+	} else {
+#endif
     result = aw8697_haptic_stop(aw8697);
     schedule_delayed_work(&aw8697->gain_work, msecs_to_jiffies(1));
     DbgOut((DBL_INFO, "%s:aw8697 result=%d \n", __func__, result));
+#ifdef CONFIG_UCI
+	}
+#endif
     if(result == 0) {
         return VIBE_S_SUCCESS;
     } else {
@@ -5679,8 +5705,22 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_AmpEnable(VibeUInt8 nActuatorIndex)
 
 //ASUS_BSP: stop and clear fifo 
 		aw8697_haptic_stop(aw8697);
+#ifdef CONFIG_UCI
+	// if in pocket boost, don't do RTP vib,
+	// ..but instead start playing WAVEFORM,
+	// ...then don't  do SendOutputs part, and stop playing at AmpDisable...
+	if (booster_in_pocket) {
+		// play wave
+		pr_info("%s ++ pocket boosting - start Wave play instead of RTP... \n",__func__);
+		set_vibrate_int(100,100,true,false); // start wave
+		amp_skip_send_output = true;
+	} else {
+#endif
 		aw8697_haptic_set_rtp_aei(aw8697, false);
 		aw8697_interrupt_clear(aw8697);
+#ifdef CONFIG_UCI
+	}
+#endif
 
 
     if(result == 0) {
@@ -5762,10 +5802,23 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex
 		//DbgOut((DBL_INFO, "%s:aw8697 enter. nActuatorIndex=%d nOutputSignalBitDepth=%d nBufferSizeInBytes=%d \n", __func__ ,nActuatorIndex,nOutputSignalBitDepth,nBufferSizeInBytes));
 	}
 
+#ifdef CONFIG_UCI
+	if (amp_skip_send_output) {
+#ifdef UCI_DEBUG
+		pr_info("%s SKIPPING realtime samples %d %d \n",__func__,nBufferSizeInBytes,pForceOutputBuffer[0]);
+#endif
+	} else {
+#ifdef UCI_DEBUG
+		pr_info("%s playing realtime samples %d %d \n",__func__,nBufferSizeInBytes,pForceOutputBuffer[0]);
+#endif
+#endif
     if (VIBE_S_SUCCESS != aw8697_rtp_update_data(g_aw8697,nBufferSizeInBytes,pForceOutputBuffer)) {
 		DbgOut((DBL_ERROR, "%s: nActuatorIndex=%d failed ---\n", __func__, nActuatorIndex));
         return VIBE_E_FAIL;
     }
+#ifdef CONFIG_UCI
+	}
+#endif
 
     if((gVibDebugLog & 0x0004) == 0x0004)//enable immersion message
 		DbgOut((DBL_ERROR, "%s: nActuatorIndex=%d ---\n", __func__, nActuatorIndex));
