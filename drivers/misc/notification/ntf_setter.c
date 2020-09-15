@@ -176,7 +176,9 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 	}
 	if (!strcmp(event,NTF_EVENT_INPUT)) { // INPUT
 		if (ntf_wake_by_user()) {
-			set_led_blink(false);
+			if (blinking) {
+				set_led_blink(false);
+			}
 		}
 	}
 	if (!strcmp(event,NTF_EVENT_SLEEP)) {
