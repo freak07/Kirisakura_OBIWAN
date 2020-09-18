@@ -4857,7 +4857,12 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 	mutex_lock(&panel->panel_lock);
 
 #ifdef CONFIG_UCI
-	if (type == 2)
+	if (
+		(type == 2 && force_panel_fps > 0) || // 60 FPS -> 90 FPS+
+		(type == 1 && force_panel_fps > 1) || // 90 FPS -> 120 FPS+
+		(type == 0 && force_panel_fps > 2) || // 120 FPS -> 144 FPS+
+		(type == 3 && force_panel_fps > 3) // 144 FPS -> 160 FPS
+		)
 	{
 		if (force_panel_fps) {
 			if (force_panel_fps == 1) {
