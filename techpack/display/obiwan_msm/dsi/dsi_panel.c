@@ -777,12 +777,22 @@ int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 			backlight_converted = asus_alpm_bl_low;
 			pr_err("[Display] convert to %d, reason AOD\n", asus_alpm_bl_low);
 		}
+#ifndef CONFIG_UCI
 	} else if (bl_lvl < 400 && !has_pxlw_video_blocker) {
+#else
+	} else if (bl_lvl < 400 && (!has_pxlw_video_blocker && !backlight_dimmer)) {
+#endif
 		pr_err("[Display] convert to 400, reason pixelworks\n");
 		backlight_converted = 400;
+#ifndef CONFIG_UCI
 	} else if (has_pxlw_video_blocker) {
 		pr_err("[Display] do not convert backlight, reason pixelworks video blocker\n");
 	}
+#else
+	} else if (has_pxlw_video_blocker || backlight_dimmer) {
+		pr_err("[Display] do not convert backlight, reason pixelworks video blocker %d|| backlight_dimmer %d\n",has_pxlw_video_blocker,backlight_dimmer);
+	}
+#endif
 
 	return backlight_converted;
 }
@@ -820,6 +830,17 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	first_brightness_set = true;
 	if (g_panel == NULL) g_panel = panel;
 
+#if 1
+	if (backlight_dimmer && !has_pxlw_video_blocker) {
+		// with new framework, instead of pulling level down, we should keep it to the minimum,
+			// otherwise it's too dark and crushed.
+		if (bl_lvl<backlight_min) {
+			bl_lvl = backlight_min;
+		}
+	}
+#endif
+#if 0
+// new framework clashes with this, needs revised algo... since .70 framework
 	if (backlight_dimmer) {
 		if (bl_lvl <= 498) {
 			int range =  498 - 402; // 96
@@ -845,6 +866,7 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
                 bl_lvl = backlight_min;
 */
 	}
+#endif
 #endif
 
 	dsi = &panel->mipi_device;
