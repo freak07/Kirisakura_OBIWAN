@@ -5038,3 +5038,7 @@
 		rtc6226,vio-supply-voltage = <1800000 1800000 >;
 	};
 };
+
+&mdss_dsi_phy0 {
+       qcom,panel-allow-phy-poweroff;
+};
