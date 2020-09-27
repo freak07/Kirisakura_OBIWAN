@@ -37,6 +37,7 @@
 		qcom,mdss-dsi-reset-sequence = <1 1>, <0 5>, <1 10>;
 		qcom,mdss-pan-physical-width-dimension = <70>;
 		qcom,mdss-pan-physical-height-dimension = <152>;
+		qcom,ulps-enabled;
 
 		qcom,adjust-timer-wakeup-ms = <1>;
 		qcom,mdss-dsi-panel-hdr-enabled;
@@ -96,6 +97,8 @@
 				qcom,mdss-dsc-bit-per-component = <10>;
 				qcom,mdss-dsc-bit-per-pixel = <8>;
 				qcom,mdss-dsc-block-prediction-enable;
+				qcom,panel-roi-alignment = <1080 20 1080 20 1080 20>;
+				qcom,partial-update-enabled = "single_roi";
 
 				qcom,mdss-dsi-panel-phy-timings = [00 18 06 06 21 20 06
 					06 04 02 04 00 15 16];
