@@ -349,7 +349,7 @@ static void sweep2sleep_longtap_count(struct work_struct * sweep2sleep_longtap_c
 			reset_longtap_tracking();
 			if (get_s2s_doubletap_mode()==1) { // power button mode - long tap -> notif down
 				touch_down_called = false;
-				sweep2sleep_reset(true); // make sure gesture tracking for sweep stops...
+				sweep2sleep_reset(false); // make sure gesture tracking for sweep stops... BUT don't stop freeze cords! LONG tap means finger still down
 				vib_power = 100;
 				schedule_work(&sweep2sleep_vib_work);
 				write_uci_out("fp_touch");
