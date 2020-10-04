@@ -2876,6 +2876,7 @@ out:
 	return rc;
 }
 
+#if 0
 /* ASUS BSP Debug +++ */
 #define DAPS_TYPE "su"
 #define ADBD_DOMAIN "adbd"
@@ -2886,7 +2887,7 @@ static int security_set_ps(struct selinux_state *state, char *rulestr, int value
 	struct policydb *policydb = &state->ss->policydb;
 
 	write_lock_irq(&state->ss->policy_rwlock);
-	typedatum = hashtab_search(policydb->p_types.table, rulestr);
+	typedatum = policydb_hashtab_search(policydb->p_types.table, rulestr);
 	if (!typedatum){
 		printk("SELinux: unrecognized type %s \n", rulestr);
 		goto out;
@@ -2965,6 +2966,8 @@ int security_get_asus(struct selinux_state *state)
 	return security_get_ps(state, SAVELOG_DOMAIN);
 }
 /* ASUS BSP Debug --- */
+
+#endif
 
 int security_get_bools(struct selinux_state *state,
 		       u32 *len, char ***names, int **values)
