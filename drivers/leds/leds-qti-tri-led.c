@@ -274,6 +274,7 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 }
 #ifdef CONFIG_UCI
 static bool block_for_charge_led = false;
+static bool block_for_charge_led_crossed_from_userspace = false;
 static int bln_rgb_light_level = 0;
 
 extern void uci_led_set_fully_charged_pattern(bool on);
@@ -314,6 +315,9 @@ static int qpnp_tri_led_set_brightness(struct led_classdev *led_cdev,
 	}
 	// block for charging, when brightness is >0, otherwise we might block USB disconnect LED off settings from userspace.
 	if (brightness>0 && block_for_charge_led) return rc;
+
+	// signal that led was set without blocking...
+	block_for_charge_led_crossed_from_userspace = true;
 #endif
 
 	mutex_lock(&led->lock);
@@ -584,6 +588,7 @@ void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink
 void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink) {
 	if (g_green!=NULL && g_red!=NULL) {
 		block_for_charge_led = true;
+		block_for_charge_led_crossed_from_userspace = false;
 		if (warp && !blink) {
 			uci_led_set_fully_charged_pattern(true);
 			ntf_led_set_brightness(g_green,g,false);
@@ -596,8 +601,16 @@ void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink)
 	}
 }
 EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
+
 void ntf_led_front_release_charge(void) {
 	uci_led_set_fully_charged_pattern(false);
+	if (!block_for_charge_led_crossed_from_userspace) { 
+		// userspace framework didn't set leds to Off, after charge interrupted
+		// let's do it now...
+		pr_info("%s setting led after disconnect, as userspace framework didn't do it...\n",__func__);
+		ntf_led_set_brightness(g_red,0,false);
+		ntf_led_set_brightness(g_green,0,false);
+	}
 	block_for_charge_led = false;
 }
 EXPORT_SYMBOL(ntf_led_front_release_charge);
