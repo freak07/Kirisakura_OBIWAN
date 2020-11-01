@@ -88,6 +88,9 @@ static int i2c_write_bytes(struct i2c_client *client, char *write_buf, int write
 	return ret;
 } 
 
+#ifdef CONFIG_UCI
+int ene_8k41_resume(struct device *dev);
+#endif
 static int ene_8k41_read_bytes(struct i2c_client *client, short addr, char *data)
 {
 	int err = 0;
@@ -101,6 +104,17 @@ static int ene_8k41_read_bytes(struct i2c_client *client, short addr, char *data
 	err = i2c_write_bytes(client, buf, 3);	//set register address
 	if (err !=1)
 		printk("[AURA_SYNC] i2c_write_bytes:err %d\n", err);
+#ifdef CONFIG_UCI
+	if (err == -107) {
+		pr_info("%s -107 error, RETRY: resume needed from sleeping...\n",__func__);
+		err = ene_8k41_resume(NULL);
+		pr_info("%s -107 error, RETRY: resume result: %d\n",__func__,err);
+
+		err = i2c_write_bytes(client, buf, 3);	//set register address
+		if (err !=1)
+			printk("[AURA_SYNC] RETRY: i2c_write_bytes:err %d\n", err);
+	}
+#endif
 
 	buf[0] = 0x81;
 	err = i2c_read_bytes(client, buf, 1, data, 1);	//send read command
@@ -123,6 +137,17 @@ static int ene_8k41_write_bytes(struct i2c_client *client, short addr, char valu
 	err = i2c_write_bytes(client, buf, 3);	//set register address
 	if (err !=1)
 		printk("[AURA_SYNC] i2c_write_bytes:err %d\n", err);
+#ifdef CONFIG_UCI
+	if (err == -107) {
+		pr_info("%s -107 error, RETRY: resume needed from sleeping...\n",__func__);
+		err = ene_8k41_resume(NULL);
+		pr_info("%s -107 error, RETRY: resume result: %d\n",__func__,err);
+
+		err = i2c_write_bytes(client, buf, 3);	//set register address
+		if (err !=1)
+			printk("[AURA_SYNC] RETRY: i2c_write_bytes:err %d\n", err);
+	}
+#endif
 
 	buf[0] = 0x01;
 	buf[1] = value;
