@@ -18,15 +18,19 @@
 
 #ifdef CONFIG_UCI
 #include <linux/uci/uci.h>
+#include <linux/notification/notification.h>
 #endif
 
 #ifdef CONFIG_UCI
 static bool breathe_on_strobe = false;
 static bool sec_led_on_strobe = false;
+static bool sec_led_block_proximity = false;
+static bool block_proximity = false;
 static int pwm_divider = 1;
 
 static bool led2_override_on = false;
 static bool breathe_on_strobe_on = false;
+static bool in_proximity = false;
 #endif
 
 #define FW_PATH "/asusfw/aura_sync/ENE-8K41-aura-V7.bin"
@@ -480,6 +484,12 @@ void bumper_switch(u32 val)
 	if (CSCmode)
 		printk("[AURA_SYNC] bumper_switch. %d, CSCmode %d\n", val, CSCmode);
 
+#ifdef CONFIG_UCI
+	if ((sec_led_block_proximity || block_proximity) && in_proximity) {
+		pr_info("%s in proximity, block bumper switch\n",__func__);
+		val = 0;
+	}
+#endif
 	if(val>0) {
 		if(!lid2_status && !CSCmode){
 			printk("[ASUS_SYNC] lid2_status:0x%x, no need open Bumper.\n", lid2_status);
@@ -1105,6 +1115,12 @@ static ssize_t led_on_store(struct device *dev, struct device_attribute *attr, c
 	ret = kstrtou32(buf, 10, &val);
 	if (ret)
 		return ret;
+#ifdef CONFIG_UCI
+	if (block_proximity && in_proximity) {
+		pr_info("%s in proximity, block led on store\n",__func__);
+		val = 0;
+	}
+#endif
 
 	mutex_lock(&g_pdata->ene_mutex);
 	if(val>0) {
@@ -1224,6 +1240,12 @@ static ssize_t led2_on_store(struct device *dev, struct device_attribute *attr, 
 	if (led2_override_on) {
 		pr_info("%s led2 on override...\n",__func__);
 		val = 1;
+	}
+#endif
+#ifdef CONFIG_UCI
+	if ((sec_led_block_proximity || block_proximity) && in_proximity) {
+		pr_info("%s in proximity, block led2 on store\n",__func__);
+		val = 0;
 	}
 #endif
 	if (ret)
@@ -1969,9 +1991,26 @@ static int ene_8k41_parse_dt(struct device *dev, struct ene_8k41_platform_data *
 }
 
 #ifdef CONFIG_UCI
+#ifdef CONFIG_UCI_NOTIFICATIONS
+static void ntf_listener(char* event, int num_param, char* str_param) {
+        if (strcmp(event,NTF_EVENT_CHARGE_LEVEL) && strcmp(event, NTF_EVENT_INPUT)) {
+                pr_info("%s aura - listener event %s %d %s\n",__func__,event,num_param,str_param);
+        }
+        if (!strcmp(event,NTF_EVENT_PROXIMITY)) { // proximity
+                if (!!num_param) {
+                        in_proximity = true;
+                } else{
+                        in_proximity = false;
+                }
+	}
+}
+#endif
+
 static void uci_user_listener(void) {
 	breathe_on_strobe = !!uci_get_user_property_int_mm("back_led_breathe_on_strobe", 0, 0, 1);
 	sec_led_on_strobe = !!uci_get_user_property_int_mm("back_led_sec_led_on_strobe", 0, 0, 1);
+	sec_led_block_proximity = !!uci_get_user_property_int_mm("back_led_sec_led_block_proximity", 0, 0, 1);
+	block_proximity = !!uci_get_user_property_int_mm("back_led_block_proximity", 0, 0, 1);
 	pwm_divider = uci_get_user_property_int_mm("back_led_pwm_divider", 1, 1, 4);
 }
 #endif
@@ -2159,6 +2198,9 @@ if (platform_data->aura_front_en != -ENOENT )
 
 #ifdef CONFIG_UCI
 	uci_add_user_listener(uci_user_listener);
+#ifdef CONFIG_UCI_NOTIFICATIONS
+        ntf_add_listener(ntf_listener);
+#endif
 #endif
 	printk("[AURA_SYNC] ene_8k41_probe done.\n");
 	return 0;
