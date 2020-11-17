@@ -526,6 +526,7 @@ static int qpnp_tri_led_hw_init(struct qpnp_tri_led_chip *chip)
 #ifdef CONFIG_UCI
 
 void ntf_led_set_brightness(struct qpnp_led_dev *led, int brightness, bool blink) {
+    if (led==NULL) return;
     if (!blink) {
 	int rc = 0;
 
@@ -603,13 +604,15 @@ void ntf_led_front_set_charge_colors(int r, int g, int b, bool warp, bool blink)
 EXPORT_SYMBOL(ntf_led_front_set_charge_colors);
 
 void ntf_led_front_release_charge(void) {
-	uci_led_set_fully_charged_pattern(false);
-	if (!block_for_charge_led_crossed_from_userspace) { 
-		// userspace framework didn't set leds to Off, after charge interrupted
-		// let's do it now...
-		pr_info("%s setting led after disconnect, as userspace framework didn't do it...\n",__func__);
-		ntf_led_set_brightness(g_red,0,false);
-		ntf_led_set_brightness(g_green,0,false);
+	if (g_green!=NULL && g_red!=NULL) {
+		uci_led_set_fully_charged_pattern(false);
+		if (!block_for_charge_led_crossed_from_userspace) { 
+			// userspace framework didn't set leds to Off, after charge interrupted
+			// let's do it now...
+			pr_info("%s setting led after disconnect, as userspace framework didn't do it...\n",__func__);
+			ntf_led_set_brightness(g_red,0,false);
+			ntf_led_set_brightness(g_green,0,false);
+		}
 	}
 	block_for_charge_led = false;
 }
