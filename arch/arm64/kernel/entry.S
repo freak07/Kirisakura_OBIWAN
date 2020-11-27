@@ -332,9 +332,6 @@ alternative_if ARM64_WORKAROUND_845719
 alternative_else_nop_endif
 #endif
 3:
-	 mrs     x1, cntkctl_el1
-	 eor     x1, x1, #2
-	 msr     cntkctl_el1, x1
 	apply_ssbd 0, x0, x1
 	.endif
 
