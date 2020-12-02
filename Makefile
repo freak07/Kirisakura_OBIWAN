@@ -517,9 +517,6 @@ ifneq ($(LLVM_IAS),1)
 CLANG_FLAGS	+= -no-integrated-as
 endif
 CLANG_FLAGS	+= -Werror=unknown-warning-option
-ifeq ($(CONFIG_LD_IS_LLD), y)
-CLANG_FLAGS += -fuse-ld=lld
-endif
 KBUILD_CFLAGS	+= $(CLANG_FLAGS)
 KBUILD_AFLAGS	+= $(CLANG_FLAGS)
 export CLANG_FLAGS
@@ -634,9 +631,8 @@ endif
 ifdef CONFIG_LTO_CLANG
 # use llvm-ar for building symbol tables from IR files, and llvm-nm instead
 # of objdump for processing symbol versions and exports
-LLVM_BIN_PATH := $(patsubst %/,%,$(dir $(shell which $(CC))))
-LLVM_AR		:= $(LLVM_BIN_PATH)/llvm-ar
-LLVM_NM		:= $(LLVM_BIN_PATH)/llvm-nm
+LLVM_AR		:= llvm-ar
+LLVM_NM		:= llvm-nm
 export LLVM_AR LLVM_NM
 endif
 
@@ -693,7 +689,7 @@ KBUILD_CFLAGS	+= $(call cc-disable-warning, address-of-packed-member)
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS   += -Os
 else
-KBUILD_CFLAGS   += -O3
+KBUILD_CFLAGS   += -O2
 endif
 
 # Tell gcc to never replace conditional load with a non-conditional one
@@ -738,7 +734,8 @@ stackp-flags-$(CONFIG_STACKPROTECTOR_STRONG)      := -fstack-protector-strong
 KBUILD_CFLAGS += $(stackp-flags-y)
 
 ifeq ($(cc-name),clang)
-KBUILD_CFLAGS += -meabi gnu
+KBUILD_CFLAGS += $(CLANG_TARGET) $(CLANG_GCC_TC) -meabi gnu
+KBUILD_AFLAGS += $(CLANG_TARGET) $(CLANG_GCC_TC)
 KBUILD_CPPFLAGS += $(call cc-option,-Qunused-arguments,)
 KBUILD_CFLAGS += $(call cc-disable-warning, format-invalid-specifier)
 KBUILD_CFLAGS += $(call cc-disable-warning, gnu)

@@ -51,11 +51,6 @@ endif
 # Disable gcov profiling for VDSO code
 GCOV_PROFILE := n
 
-ifeq ($(CONFIG_LD_IS_LLD), y)
-ccflags-y += -fuse-ld=lld
-endif
-
-
 obj-y += vdso.o
 extra-y += vdso.lds
 CPPFLAGS_vdso.lds += -P -C -U$(ARCH)
