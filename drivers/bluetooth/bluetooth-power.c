@@ -1209,8 +1209,10 @@ static long bt_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			bt_power_pdata->bt_vdd_rfa1);
 		set_pwr_srcs_status(BT_VDD_RFA2_LDO_CURRENT,
 			bt_power_pdata->bt_vdd_rfa2);
+#ifndef ASUS_ZS661KS_PROJECT
 		set_pwr_srcs_status(BT_VDD_ASD_LDO_CURRENT,
 			bt_power_pdata->bt_vdd_asd);
+#endif
 		set_pwr_srcs_status(BT_VDD_IO_LDO_CURRENT,
 			bt_power_pdata->bt_vdd_io);
 		set_pwr_srcs_status(BT_VDD_XTAL_LDO_CURRENT,
