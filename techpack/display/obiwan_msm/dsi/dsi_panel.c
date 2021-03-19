@@ -756,8 +756,8 @@ static int dsi_panel_wled_register(struct dsi_panel *panel,
 #ifdef CONFIG_UCI
 
 struct dsi_panel *g_panel = NULL;
-static int backlight_min = 6;
-static bool backlight_dimmer = false;
+static int backlight_min = 120;
+static bool backlight_dimmer = true;
 static u32 last_brightness;
 static bool first_brightness_set = false;
 
@@ -834,7 +834,8 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	first_brightness_set = true;
 	if (g_panel == NULL) g_panel = panel;
 
-#if 1
+/*
+#if 0
 	if (backlight_dimmer && !has_pxlw_video_blocker) {
 		// with new framework, instead of pulling level down, we should keep it to the minimum,
 			// otherwise it's too dark and crushed.
@@ -843,7 +844,8 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		}
 	}
 #endif
-#if 0
+*/
+#if 1
 // new framework clashes with this, needs revised algo... since .70 framework
 	if (backlight_dimmer) {
 		if (bl_lvl <= 498) {
