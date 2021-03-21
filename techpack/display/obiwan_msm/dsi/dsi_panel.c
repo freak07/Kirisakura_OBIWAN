@@ -756,7 +756,7 @@ static int dsi_panel_wled_register(struct dsi_panel *panel,
 #ifdef CONFIG_UCI
 
 struct dsi_panel *g_panel = NULL;
-static int backlight_min = 180;
+static int backlight_min = 40;
 static bool backlight_dimmer = true;
 static u32 last_brightness;
 static bool first_brightness_set = false;
