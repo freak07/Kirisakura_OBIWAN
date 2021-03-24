@@ -13,8 +13,8 @@ echo
 mkdir -p out
 export ARCH=arm64
 export SUBARCH=arm64
-export CLANG_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r407598b/bin
-export CLANG_BIN_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r407598b/bin
+export CLANG_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r416183/bin
+export CLANG_BIN_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r416183/bin
 export PATH=${CLANG_PATH}:${PATH}
 export DTC_EXT=/home/miles/Downloads/DU_Tools/dtc-aosp
 export CLANG_TRIPLE=aarch64-linux-gnu-
