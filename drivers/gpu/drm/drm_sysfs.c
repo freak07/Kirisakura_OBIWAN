@@ -85,14 +85,20 @@ static ssize_t pxlw_video_blocker_show(struct class *class,
 					struct class_attribute *attr,
 					char *buf)
 {
-	return 0;
+	return sprintf(buf, "%d\n", has_pxlw_video_blocker);
 }
 
 static ssize_t pxlw_video_blocker_store(struct class *class,
 					struct class_attribute *attr,
 					const char *buf, size_t count)
 {
-	return 0;
+	if (!count)
+		return -EINVAL;
+
+	sscanf(buf, "%d", &has_pxlw_video_blocker);
+	printk("[Display] set pxlw video blocker: %d\n", has_pxlw_video_blocker);
+
+	return count;
 }
 static CLASS_ATTR_RW(pxlw_video_blocker);
 
