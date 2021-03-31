@@ -57,7 +57,7 @@ extern char asus_var_osc_reg_p20_value;
 extern bool asus_var_regulator_always_on;
 static bool asus_var_regulator_last_on = true;
 extern bool asus_var_global_hbm_pending;
-extern int  has_pxlw_video_blocker;
+extern int has_pxlw_video_blocker;
 
 extern int asus_current_fps;
 extern int asus_alpm_bl_high;
@@ -757,7 +757,7 @@ static int dsi_panel_wled_register(struct dsi_panel *panel,
 
 struct dsi_panel *g_panel = NULL;
 static int backlight_min = 40;
-static bool backlight_dimmer = true;
+static bool backlight_dimmer = false;
 static u32 last_brightness;
 static bool first_brightness_set = false;
 
