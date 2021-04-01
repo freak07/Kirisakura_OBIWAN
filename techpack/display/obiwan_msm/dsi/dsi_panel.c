@@ -2138,7 +2138,8 @@ static int dsi_panel_parse_cmd_sets_sub(struct dsi_panel_cmd_set *cmd,
 	data = utils->get_property(utils->data, cmd_set_prop_map[type],
 			&length);
 #ifdef CONFIG_UCI
-	if (type == DSI_CMD_SET_160_C1 || type == DSI_CMD_SET_144_C1 || type == DSI_CMD_SET_120_C1 || type == DSI_CMD_SET_90_C1 || type == DSI_CMD_SET_60_C1) {
+	if (!data && (type == DSI_CMD_SET_160_C1 || type == DSI_CMD_SET_144_C1 || type == DSI_CMD_SET_120_C1 || type == DSI_CMD_SET_90_C1 || type == DSI_CMD_SET_60_C1)) {
+		// handle the case when no cmd was found (stock dtbo), fall back to stock cmd type...
 		switch (type) {
 			case DSI_CMD_SET_160_C1:
 				type = DSI_CMD_SET_160;
