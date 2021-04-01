@@ -502,6 +502,9 @@ static int dsi_panel_set_pinctrl_state(struct dsi_panel *panel, bool enable)
 #ifdef CONFIG_UCI
 static bool screen_is_on = true; // start with true, on/off is set at power off/on only!
 static bool listener_added = false;
+static bool uci_custom_panel_cmds = false;
+static int last_panel_cmd_type = -1;
+static int last_final_panel_cmd_type = -1;
 static void uci_user_listener(void);
 #endif
 
@@ -834,7 +837,6 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	first_brightness_set = true;
 	if (g_panel == NULL) g_panel = panel;
 
-/*
 #if 0
 	if (backlight_dimmer && !has_pxlw_video_blocker) {
 		// with new framework, instead of pulling level down, we should keep it to the minimum,
@@ -844,7 +846,6 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		}
 	}
 #endif
-*/
 #if 1
 // new framework clashes with this, needs revised algo... since .70 framework
 	if (backlight_dimmer) {
@@ -2023,6 +2024,13 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"asus,bus-qrcode-dim-mode-command-state",
 	"asus,bus-qrcode-dim-mode-command-state",
 	"asus,bus-qrcode-dim-mode-command-state",
+#ifdef CONFIG_UCI
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+#endif
 	/* ASUS BSP Display --- */
 };
 
@@ -2155,6 +2163,8 @@ static int dsi_panel_parse_cmd_sets_sub(struct dsi_panel_cmd_set *cmd,
 				break;
 			case DSI_CMD_SET_60_C1:
 				type = DSI_CMD_SET_60;
+				break;
+			default:
 				break;
 		}
 		data = utils->get_property(utils->data, cmd_set_prop_map[type],
@@ -4663,8 +4673,17 @@ int dsi_panel_mode_switch_to_vid(struct dsi_panel *panel)
 #ifdef CONFIG_UCI
 int force_panel_fps = 0;
 
+int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type);
+
 static void uci_user_listener(void) {
-	force_panel_fps = uci_get_user_property_int_mm("force_panel_fps", 0, 0, 4);
+	bool call_switch_fps = false;
+	{
+		int new_force_panel_fps = uci_get_user_property_int_mm("force_panel_fps", 0, 0, 4);
+		if (new_force_panel_fps!=force_panel_fps) {
+			force_panel_fps = new_force_panel_fps;
+			call_switch_fps = true;
+		}
+	}
         {
                 bool change = false;
                 int on = backlight_dimmer?1:0;
@@ -4688,6 +4707,22 @@ static void uci_user_listener(void) {
                         }
                 }
         }
+	{
+		bool new_uci_custom_panel_cmds = !!uci_get_user_property_int_mm("replace_gamma_table", 0, 0, 1);
+		if (new_uci_custom_panel_cmds != uci_custom_panel_cmds) {
+			uci_custom_panel_cmds = new_uci_custom_panel_cmds;
+			if (last_final_panel_cmd_type!=4) { // do not re-run the cmd for 160hz whele panel is on, it causes inverted colors
+				call_switch_fps = true;
+			}
+		}
+	}
+	if (call_switch_fps) {
+		if (g_panel != NULL && screen_is_on && last_panel_cmd_type>=0) {
+			// only do this, when first panel fps was already set, and we know the last panel cmd type...
+			//  force fps switch to set issue panel cmd for custom tweaks
+			dsi_panel_asus_switch_fps(g_panel, last_panel_cmd_type);
+		}
+	}
 }
 #endif
 
@@ -4916,6 +4951,7 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 	mutex_lock(&panel->panel_lock);
 
 #ifdef CONFIG_UCI
+	last_panel_cmd_type = type; // save the stock value...
 	if (
 		(type == 2 && force_panel_fps > 0) || // 60 FPS -> 90 FPS+
 		(type == 1 && force_panel_fps > 1) || // 90 FPS -> 120 FPS+
@@ -4941,6 +4977,35 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 			sched_set_refresh_rate_walt();
 		}
 	}
+	last_final_panel_cmd_type = type; // save the tweaked value...
+	if (uci_custom_panel_cmds) {
+	if (type == 2)
+		cmd_type = DSI_CMD_SET_60_C1;
+	else if (type == 1)
+		{
+		cmd_type = DSI_CMD_SET_90_C1;
+			pr_err("[WALT-Disp] set 90fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
+	else if (type == 0)
+		{
+		cmd_type = DSI_CMD_SET_120_C1;
+			pr_err("[WALT-Disp] set 120fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
+	else if (type == 3)
+		{
+		cmd_type = DSI_CMD_SET_144_C1;
+			pr_err("[WALT-Disp] set 144fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
+	else if (type == 4)
+		{
+		cmd_type = DSI_CMD_SET_160; // don't use a cmd to switch, it gets negative palette, blacks white...
+			pr_err("[WALT-Disp] set 144fps WALT RAVG_Window\n");
+		sched_set_refresh_rate_walt();
+		}
+	} else {
 #endif
 	if (type == 2)
 		cmd_type = DSI_CMD_SET_60;
@@ -4968,6 +5033,9 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 			pr_err("[WALT-Disp] set 144fps WALT RAVG_Window\n");
 		sched_set_refresh_rate_walt();
 		}
+#ifdef CONFIG_UCI
+	}
+#endif
 
 	rc = dsi_panel_tx_cmd_set(panel, cmd_type);
 	if (rc) {
