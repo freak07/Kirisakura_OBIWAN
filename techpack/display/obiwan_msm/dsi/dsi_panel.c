@@ -4711,15 +4711,19 @@ static void uci_user_listener(void) {
 		bool new_uci_custom_panel_cmds = !!uci_get_user_property_int_mm("replace_gamma_table", 0, 0, 1);
 		if (new_uci_custom_panel_cmds != uci_custom_panel_cmds) {
 			uci_custom_panel_cmds = new_uci_custom_panel_cmds;
-			if (last_final_panel_cmd_type!=4) { // do not re-run the cmd for 160hz whele panel is on, it causes inverted colors
-				call_switch_fps = true;
-			}
+			call_switch_fps = true;
 		}
 	}
 	if (call_switch_fps) {
 		if (g_panel != NULL && screen_is_on && last_panel_cmd_type>=0) {
 			// only do this, when first panel fps was already set, and we know the last panel cmd type...
 			//  force fps switch to set issue panel cmd for custom tweaks
+			if (last_final_panel_cmd_type==4) { // do not re-run the cmd for 160hz while panel is on, it causes inverted colors.first switch to 144hz
+				int stored_fps = force_panel_fps;
+				force_panel_fps = 0; // switch off forcing...
+				dsi_panel_asus_switch_fps(g_panel, 3); // 144hz
+				force_panel_fps = stored_fps; // switch back forcing
+			}
 			dsi_panel_asus_switch_fps(g_panel, last_panel_cmd_type);
 		}
 	}
@@ -5001,7 +5005,7 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 		}
 	else if (type == 4)
 		{
-		cmd_type = DSI_CMD_SET_160; // don't use a cmd to switch, it gets negative palette, blacks white...
+		cmd_type = DSI_CMD_SET_160_C1;
 			pr_err("[WALT-Disp] set 144fps WALT RAVG_Window\n");
 		sched_set_refresh_rate_walt();
 		}
