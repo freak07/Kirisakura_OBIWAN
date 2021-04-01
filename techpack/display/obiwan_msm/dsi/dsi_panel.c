@@ -1971,6 +1971,13 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"asus,bus-qrcode-dim-mode-120fps-command",
 	"asus,bus-qrcode-dim-mode-90fps-command",
 	"asus,bus-qrcode-dim-mode-60fps-command",
+#ifdef CONFIG_UCI
+	"qcom,mdss-dsi-switch-160fps-custom1-command",
+	"qcom,mdss-dsi-switch-144fps-custom1-command",
+	"qcom,mdss-dsi-switch-120fps-custom1-command",
+	"qcom,mdss-dsi-switch-90fps-custom1-command",
+	"qcom,mdss-dsi-switch-60fps-custom1-command",
+#endif
 	/* ASUS BSP Display --- */
 };
 
@@ -2130,6 +2137,29 @@ static int dsi_panel_parse_cmd_sets_sub(struct dsi_panel_cmd_set *cmd,
 
 	data = utils->get_property(utils->data, cmd_set_prop_map[type],
 			&length);
+#ifdef CONFIG_UCI
+	if (type == DSI_CMD_SET_160_C1 || type == DSI_CMD_SET_144_C1 || type == DSI_CMD_SET_120_C1 || type == DSI_CMD_SET_90_C1 || type == DSI_CMD_SET_60_C1) {
+		switch (type) {
+			case DSI_CMD_SET_160_C1:
+				type = DSI_CMD_SET_160;
+				break;
+			case DSI_CMD_SET_144_C1:
+				type = DSI_CMD_SET_144;
+				break;
+			case DSI_CMD_SET_120_C1:
+				type = DSI_CMD_SET_120;
+				break;
+			case DSI_CMD_SET_90_C1:
+				type = DSI_CMD_SET_90;
+				break;
+			case DSI_CMD_SET_60_C1:
+				type = DSI_CMD_SET_60;
+				break;
+		}
+		data = utils->get_property(utils->data, cmd_set_prop_map[type],
+			&length);
+	}
+#endif
 	if (!data) {
 		DSI_DEBUG("%s commands not defined\n", cmd_set_prop_map[type]);
 		rc = -ENOTSUPP;

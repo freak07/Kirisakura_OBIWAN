@@ -325,6 +325,13 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_DIM_120,
 	DSI_CMD_SET_DIM_90,
 	DSI_CMD_SET_DIM_60,
+#ifdef CONFIG_UCI
+	DSI_CMD_SET_160_C1,
+	DSI_CMD_SET_144_C1,
+	DSI_CMD_SET_120_C1,
+	DSI_CMD_SET_90_C1,
+	DSI_CMD_SET_60_C1,
+#endif
 	/* ASUS BSP Display --- */
 	DSI_CMD_SET_MAX
 };
