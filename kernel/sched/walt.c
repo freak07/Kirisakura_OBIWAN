@@ -214,12 +214,19 @@ void inc_rq_walt_stats(struct rq *rq, struct task_struct *p)
 {
 	inc_nr_big_task(&rq->walt_stats, p);
 	walt_inc_cumulative_runnable_avg(rq, p);
+
+	p->rtg_high_prio = task_rtg_high_prio(p);
+	if (p->rtg_high_prio)
+		rq->walt_stats.nr_rtg_high_prio_tasks++;
+
 }
 
 void dec_rq_walt_stats(struct rq *rq, struct task_struct *p)
 {
 	dec_nr_big_task(&rq->walt_stats, p);
 	walt_dec_cumulative_runnable_avg(rq, p);
+	if (p->rtg_high_prio)
+		rq->walt_stats.nr_rtg_high_prio_tasks--;
 }
 
 void fixup_walt_sched_stats_common(struct rq *rq, struct task_struct *p,
@@ -424,22 +431,27 @@ void sched_account_irqtime(int cpu, struct task_struct *curr,
 				 u64 delta, u64 wallclock)
 {
 	struct rq *rq = cpu_rq(cpu);
-	unsigned long flags, nr_windows;
+	unsigned long nr_windows;
 	u64 cur_jiffies_ts;
 
-	raw_spin_lock_irqsave(&rq->lock, flags);
-
 	/*
-	 * cputime (wallclock) uses sched_clock so use the same here for
-	 * consistency.
+	 * We called with interrupts disabled. Take the rq lock only
+	 * if we are in idle context in which case update_task_ravg()
+	 * call is needed.
 	 */
-	delta += sched_clock() - wallclock;
-	cur_jiffies_ts = get_jiffies_64();
-
-	if (is_idle_task(curr))
+	if (is_idle_task(curr)) {
+		raw_spin_lock(&rq->lock);
+		/*
+		 * cputime (wallclock) uses sched_clock so use the same here
+		 * for consistency.
+		 */
+		delta += sched_clock() - wallclock;
 		update_task_ravg(curr, rq, IRQ_UPDATE, sched_ktime_clock(),
 				 delta);
+		raw_spin_unlock(&rq->lock);
+	}
 
+	cur_jiffies_ts = get_jiffies_64();
 	nr_windows = cur_jiffies_ts - rq->irqload_ts;
 
 	if (nr_windows) {
@@ -457,7 +469,6 @@ void sched_account_irqtime(int cpu, struct task_struct *curr,
 
 	rq->cur_irqload += delta;
 	rq->irqload_ts = cur_jiffies_ts;
-	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
 
 /*
@@ -628,7 +639,7 @@ cpu_util_freq_walt(int cpu, struct sched_walt_cpu_load *walt_load)
 static inline void account_load_subtractions(struct rq *rq)
 {
 	u64 ws = rq->window_start;
-	u64 prev_ws = ws - sched_ravg_window;
+	u64 prev_ws = ws - rq->prev_window_size;
 	struct load_subtractions *ls = rq->load_subs;
 	int i;
 
@@ -703,7 +714,7 @@ void update_cluster_load_subtractions(struct task_struct *p,
 {
 	struct sched_cluster *cluster = cpu_cluster(cpu);
 	struct cpumask cluster_cpus = cluster->cpus;
-	u64 prev_ws = ws - sched_ravg_window;
+	u64 prev_ws = ws - cpu_rq(cpu)->prev_window_size;
 	int i;
 
 	cpumask_clear_cpu(cpu, &cluster_cpus);
@@ -2066,8 +2077,10 @@ static inline void run_walt_irq_work(u64 old_window_start, struct rq *rq)
 
 	result = atomic64_cmpxchg(&walt_irq_work_lastq_ws, old_window_start,
 				   rq->window_start);
-	if (result == old_window_start)
+	if (result == old_window_start) {
 		walt_irq_work_queue(&walt_cpufreq_irq_work);
+		trace_walt_window_rollover(rq->window_start);
+	}
 }
 
 /* Reflect task activity on its demand and cpu's busy time statistics */
@@ -3442,11 +3455,19 @@ void walt_irq_work(struct irq_work *irq_work)
 	/*
 	 * If the window change request is in pending, good place to
 	 * change sched_ravg_window since all rq locks are acquired.
+	 *
+	 * If the current window roll over is delayed such that the
+	 * mark_start (current wallclock with which roll over is done)
+	 * of the current task went past the window start with the
+	 * updated new window size, delay the update to the next
+	 * window roll over. Otherwise the CPU counters (prs and crs) are
+	 * not rolled over properly as mark_start > window_start.
 	 */
 	if (!is_migration) {
 		spin_lock_irqsave(&sched_ravg_window_lock, flags);
 
-		if (sched_ravg_window != new_sched_ravg_window) {
+		if ((sched_ravg_window != new_sched_ravg_window) &&
+		    (wc < this_rq()->window_start + new_sched_ravg_window)) {
 			sched_ravg_window_change_time = sched_ktime_clock();
 			printk_deferred("ALERT: changing window size from %u to %u at %lu\n",
 					sched_ravg_window,

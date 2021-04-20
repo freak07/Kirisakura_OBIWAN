@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/device.h>
@@ -5024,7 +5024,12 @@ int smblib_set_prop_typec_power_role(struct smb_charger *chg,
 	smblib_dbg(chg, PR_MISC, "power role change: %d --> %d!",
 			chg->power_role, val->intval);
 
-	if (chg->power_role == val->intval) {
+	/*
+	 * Force the power-role if the initial value is NONE, for the
+	 * legacy cable detection WA.
+	 */
+	if (chg->power_role == val->intval &&
+			chg->power_role != POWER_SUPPLY_TYPEC_PR_NONE) {
 		smblib_dbg(chg, PR_MISC, "power role already in %d, ignore!",
 				chg->power_role);
 		return 0;
@@ -5082,7 +5087,7 @@ int smblib_set_prop_typec_power_role(struct smb_charger *chg,
 		break;
 	default:
 		smblib_err(chg, "power role %d not supported\n", val->intval);
-		return -EINVAL;
+		rc = -EINVAL;
 	}
 	CHG_DBG("Type : %d , power_role : 0x%x\n", val->intval, power_role);
 	CHG_DBG(" is_hall_sensor_detect : %d , ASUS_POGO_ID : %d\n", is_hall_sensor_detect, ASUS_POGO_ID);
@@ -8215,7 +8220,9 @@ static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
 	 * battery. Trigger the charge termination WA once charging is completed
 	 * to prevent overcharing.
 	 */
-	if ((batt_status == TERMINATE_CHARGE) && (pval.intval == 100)) {
+	if ((batt_status == TERMINATE_CHARGE) && (pval.intval == 100) &&
+		(ktime_to_ms(alarm_expires_remaining(/* alarm not pending */
+				&chg->chg_termination_alarm)) <= 0)) {
 		chg->cc_soc_ref = 0;
 		chg->last_cc_soc = 0;
 		chg->term_vbat_uv = 0;
@@ -9967,6 +9974,10 @@ irqreturn_t typec_attach_detach_irq_handler(int irq, void *data)
 	bool attached = false;
 	int rc;
 
+	/* IRQ not expected to be executed for uUSB, return */
+	if (chg->connector_type == POWER_SUPPLY_CONNECTOR_MICRO_USB)
+		return IRQ_HANDLED;
+
 	smblib_dbg(chg, PR_INTERRUPT, "IRQ: %s\n", irq_data->name);
 
 	rc = smblib_read(chg, TYPE_C_STATE_MACHINE_STATUS_REG, &stat);
@@ -10717,10 +10728,27 @@ static void smblib_uusb_otg_work(struct work_struct *work)
 		goto out;
 	}
 	otg = !!(stat & U_USB_GROUND_NOVBUS_BIT);
-	if (chg->otg_present != otg)
+	if (chg->otg_present != otg) {
+		if (otg) {
+			/* otg cable inserted */
+			if (chg->typec_port) {
+				typec_partner_register(chg);
+				typec_set_data_role(chg->typec_port,
+							TYPEC_HOST);
+				typec_set_pwr_role(chg->typec_port,
+							TYPEC_SOURCE);
+			}
+		} else if (chg->typec_port) {
+			/* otg cable removed */
+			typec_set_data_role(chg->typec_port, TYPEC_DEVICE);
+			typec_set_pwr_role(chg->typec_port, TYPEC_SINK);
+			typec_partner_unregister(chg);
+		}
+
 		smblib_notify_usb_host(chg, otg);
-	else
+	} else {
 		goto out;
+	}
 
 	chg->otg_present = otg;
 	if (!otg)
@@ -10944,6 +10972,7 @@ static void smblib_chg_termination_work(struct work_struct *work)
 						chg_termination_work);
 	int rc, input_present, delay = CHG_TERM_WA_ENTRY_DELAY_MS;
 	int vbat_now_uv, max_fv_uv;
+	u8 stat = 0;
 
 	/*
 	 * Hold awake votable to prevent pm_relax being called prior to
@@ -10958,16 +10987,31 @@ static void smblib_chg_termination_work(struct work_struct *work)
 	rc = smblib_get_prop_from_bms(chg,
 				POWER_SUPPLY_PROP_REAL_CAPACITY, &pval);
 	if ((rc < 0) || (pval.intval < 100)) {
-		vote(chg->usb_icl_votable, CHG_TERMINATION_VOTER, false, 0);
-		vote(chg->dc_suspend_votable, CHG_TERMINATION_VOTER, false, 0);
-		goto out;
+		rc = smblib_read(chg, BATTERY_CHARGER_STATUS_1_REG, &stat);
+		if (rc < 0)
+			goto out;
+
+		/* check we are not in termination to exit the WA */
+		if ((stat & BATTERY_CHARGER_STATUS_MASK) != TERMINATE_CHARGE) {
+			vote(chg->usb_icl_votable,
+				CHG_TERMINATION_VOTER, false, 0);
+			vote(chg->dc_suspend_votable,
+				CHG_TERMINATION_VOTER, false, 0);
+			goto out;
+		}
 	}
 
 	/* Get the battery float voltage */
 	rc = smblib_get_prop_from_bms(chg, POWER_SUPPLY_PROP_VOLTAGE_MAX,
 				&pval);
-	if (rc < 0)
-		goto out;
+	if (rc < 0) {
+		/* FG based targets supports only MAX_DESIGN property */
+		rc = smblib_get_prop_from_bms(chg,
+					POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN,
+					&pval);
+		if (rc < 0)
+			goto out;
+	}
 
 	max_fv_uv = pval.intval;
 
@@ -11659,7 +11703,7 @@ int smblib_init(struct smb_charger *chg)
 		}
 
 		rc = qcom_step_chg_init(chg->dev, chg->step_chg_enabled,
-						chg->sw_jeita_enabled, false);
+				chg->sw_jeita_enabled, chg->jeita_arb_enable);
 		if (rc < 0) {
 			smblib_err(chg, "Couldn't init qcom_step_chg_init rc=%d\n",
 				rc);

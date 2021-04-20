@@ -266,6 +266,11 @@
 #define DWC3_GUCTL1_TX_IPGAP_LINECHECK_DIS	BIT(28)
 #define DWC3_GUCTL1_DEV_L1_EXIT_BY_HW	BIT(24)
 #define DWC3_GUCTL1_IP_GAP_ADD_ON(n)	(n << 21)
+
+#define DWC3_GUCTL1_PARKMODE_DISABLE_SS		BIT(17)
+#define DWC3_GUCTL1_PARKMODE_DISABLE_HS		BIT(16)
+#define DWC3_GUCTL1_PARKMODE_DISABLE_FSLS	BIT(15)
+
 #define DWC3_GUCTL1_L1_SUSP_THRLD_EN_FOR_HOST	BIT(8)
 
 /* Global Status Register */
@@ -1360,7 +1365,7 @@ struct dwc3 {
 	 * and core will power collapse. This also leads to reset-resume of
 	 * connected devices on PM resume.
 	 */
-	bool			host_poweroff_in_pm_suspend;
+	bool			ignore_wakeup_src_in_hostmode;
 	int			retries_on_error;
 	/*  If true, GDSC collapse will happen in HOST mode bus suspend */
 	bool			gdsc_collapse_in_host_suspend;

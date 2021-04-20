@@ -92,6 +92,7 @@
 #define MISC_CFG0_REG			0x2634
 #define DIS_SYNC_DRV_BIT		BIT(5)
 #define SW_EN_SWITCHER_BIT		BIT(3)
+#define CFG_DIS_FPF_IREV_BIT		BIT(1)
 
 #define MISC_CFG1_REG			0x2635
 #define MISC_CFG1_MASK			GENMASK(7, 0)
@@ -175,6 +176,9 @@
 
 #define PERPH0_CFG_SDCDC_REG		0x267A
 #define EN_WIN_UV_BIT			BIT(7)
+
+#define PERPH0_SOVP_CFG0_REG		0x2680
+#define CFG_OVP_IGNORE_UVLO		BIT(5)
 
 #define PERPH0_SSUPPLY_CFG0_REG		0x2682
 #define EN_HV_OV_OPTION2_BIT		BIT(7)
@@ -346,6 +350,7 @@ struct smb1398_chip {
 	bool			slave_en;
 	bool			in_suspend;
 	bool			disabled;
+	bool			usb_present;
 };
 
 static int smb1398_read(struct smb1398_chip *chip, u16 reg, u8 *val)
@@ -876,6 +881,23 @@ static void smb1398_toggle_switcher(struct smb1398_chip *chip)
 			DIV2_EN_ILIM_DET, DIV2_EN_ILIM_DET);
 	if (rc < 0)
 		dev_err(chip->dev, "Couldn't disable EN_ILIM_DET, rc=%d\n", rc);
+}
+
+static int smb1398_toggle_uvlo(struct smb1398_chip *chip)
+{
+	int rc;
+
+	rc = smb1398_masked_write(chip, PERPH0_SOVP_CFG0_REG,
+				CFG_OVP_IGNORE_UVLO, CFG_OVP_IGNORE_UVLO);
+	if (rc < 0)
+		dev_err(chip->dev, "Couldn't write IGNORE_UVLO rc=%d\n", rc);
+
+	rc = smb1398_masked_write(chip, PERPH0_SOVP_CFG0_REG,
+				CFG_OVP_IGNORE_UVLO, 0);
+	if (rc < 0)
+		dev_err(chip->dev, "Couldn't write IGNORE_UVLO, rc=%d\n", rc);
+
+	return rc;
 }
 
 static enum power_supply_property div2_cp_master_props[] = {
@@ -1656,6 +1678,20 @@ static void smb1398_status_change_work(struct work_struct *work)
 		vote(chip->div2_cp_disable_votable, CUTOFF_SOC_VOTER, false, 0);
 
 	rc = power_supply_get_property(chip->usb_psy,
+			POWER_SUPPLY_PROP_PRESENT, &pval);
+	if (rc < 0) {
+		dev_err(chip->dev,
+			"Couldn't get USB PRESENT status, rc=%d\n", rc);
+		goto out;
+	}
+
+	if (chip->usb_present != !!pval.intval) {
+		chip->usb_present = !!pval.intval;
+		if (!chip->usb_present) /* USB has been removed */
+			smb1398_toggle_uvlo(chip);
+	}
+
+	rc = power_supply_get_property(chip->usb_psy,
 			POWER_SUPPLY_PROP_SMB_EN_MODE, &pval);
 	if (rc < 0) {
 		dev_err(chip->dev, "Couldn't get SMB_EN_MODE, rc=%d\n", rc);
@@ -1945,6 +1981,14 @@ static int smb1398_div2_cp_hw_init(struct smb1398_chip *chip)
 		return rc;
 	}
 
+	/* Configure window (Vin/2 - Vout) UV level to 10mV */
+	rc = smb1398_masked_write(chip, NOLOCK_SPARE_REG,
+			DIV2_WIN_UV_SEL_BIT, 0);
+	if (rc < 0) {
+		dev_err(chip->dev, "Couldn't set WIN_UV_10_MV rc=%d\n", rc);
+		return rc;
+	}
+
 	/* Configure master TEMP pin to output Vtemp signal by default */
 	rc = smb1398_masked_write(chip, SSUPLY_TEMP_CTRL_REG,
 			SEL_OUT_TEMP_MAX_MASK, SEL_OUT_VTEMP);
@@ -1985,6 +2029,14 @@ static int smb1398_div2_cp_hw_init(struct smb1398_chip *chip)
 		return rc;
 	}
 
+	/* Do not disable FP_FET during IREV conditions */
+	rc = smb1398_masked_write(chip, MISC_CFG0_REG, CFG_DIS_FPF_IREV_BIT, 0);
+	if (rc < 0) {
+		dev_err(chip->dev, "Couldn't set CFG_DIS_FPF_IREV_BIT, rc=%d\n",
+				rc);
+		return rc;
+	}
+
 	/* switcher enable controlled by register */
 	rc = smb1398_masked_write(chip, MISC_CFG0_REG,
 			SW_EN_SWITCHER_BIT, SW_EN_SWITCHER_BIT);
@@ -1997,6 +2049,7 @@ static int smb1398_div2_cp_hw_init(struct smb1398_chip *chip)
 	return rc;
 }
 
+#define DIV2_CP_MIN_ILIM_UA 1000000
 static int smb1398_div2_cp_parse_dt(struct smb1398_chip *chip)
 {
 	int rc = 0;
@@ -2019,9 +2072,14 @@ static int smb1398_div2_cp_parse_dt(struct smb1398_chip *chip)
 		return rc;
 	}
 
-	chip->div2_cp_min_ilim_ua = 750000;
 	of_property_read_u32(chip->dev->of_node, "qcom,div2-cp-min-ilim-ua",
 			&chip->div2_cp_min_ilim_ua);
+	/*
+	 * Set minimum allowed ilim configuration to 1A for DIV2_CP
+	 * operation.
+	 */
+	if (chip->div2_cp_min_ilim_ua < DIV2_CP_MIN_ILIM_UA)
+		chip->div2_cp_min_ilim_ua = DIV2_CP_MIN_ILIM_UA;
 
 	chip->max_cutoff_soc = 85;
 	of_property_read_u32(chip->dev->of_node, "qcom,max-cutoff-soc",
@@ -2267,6 +2325,14 @@ static int smb1398_div2_cp_slave_probe(struct smb1398_chip *chip)
 	if (rc < 0) {
 		dev_err(chip->dev, "Couldn't read slave MODE_STATUS_REG, rc=%d\n",
 				rc);
+		return rc;
+	}
+
+	/* Configure window (Vin/2 - Vout) UV level to 10mV */
+	rc = smb1398_masked_write(chip, NOLOCK_SPARE_REG,
+			DIV2_WIN_UV_SEL_BIT, 0);
+	if (rc < 0) {
+		dev_err(chip->dev, "Couldn't set WIN_UV_10_MV rc=%d\n", rc);
 		return rc;
 	}
 
@@ -2638,6 +2704,10 @@ static void smb1398_shutdown(struct platform_device *pdev)
 	rc = smb1398_div2_cp_switcher_en(chip, 0);
 	if (rc < 0)
 		dev_err(chip->dev, "Couldn't disable chip rc= %d\n", rc);
+
+	rc = smb1398_toggle_uvlo(chip);
+	if (rc < 0)
+		dev_err(chip->dev, "Couldn't toggle uvlo rc= %d\n", rc);
 }
 
 static const struct dev_pm_ops smb1398_pm_ops = {
