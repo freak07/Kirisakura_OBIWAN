@@ -41,6 +41,10 @@
 #include "include/mount.h"
 #include "include/secid.h"
 
+#ifdef CONFIG_MACH_ASUS_KONA
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
+#endif
+
 /* Flag indicating whether initialization completed */
 int apparmor_initialized;
 
