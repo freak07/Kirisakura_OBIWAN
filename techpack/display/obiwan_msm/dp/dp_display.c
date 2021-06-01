@@ -1366,6 +1366,12 @@ static int dp_display_handle_disconnect(struct dp_display_private *dp)
 
 static void dp_display_disconnect_sync(struct dp_display_private *dp)
 {
+	/* ASUS BSP DP, TT#282211 */
+	if (IS_ERR_OR_NULL(dp)) {
+		DP_ERR("invalid params in disconnect.\n");
+		return;
+	}
+
 	/* cancel any pending request */
 	dp_display_state_add(DP_STATE_ABORTED);
 
@@ -1408,6 +1414,14 @@ static int dp_display_usbpd_disconnect_cb(struct device *dev)
 
 	SDE_EVT32_EXTERNAL(SDE_EVTLOG_FUNC_ENTRY, dp->state,
 			dp->debug->psm_enabled);
+
+	/* skip if a disconnect is already in progress */
+	if (dp_display_state_is(DP_STATE_ABORTED) &&
+	    dp_display_state_is(DP_STATE_READY)) {
+		DP_DEBUG("disconnect already in progress\n");
+		SDE_EVT32_EXTERNAL(SDE_EVTLOG_FUNC_CASE1, dp->state);
+		return 0;
+	}
 
 	if (dp->debug->psm_enabled && dp_display_state_is(DP_STATE_READY))
 		dp->link->psm_config(dp->link, &dp->panel->link_info, true);
