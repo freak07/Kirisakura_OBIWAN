@@ -353,6 +353,8 @@ static int __fib_validate_source(struct sk_buff *skb, __be32 src, __be32 dst,
 		fl4.flowi4_proto = 0;
 		fl4.fl4_sport = 0;
 		fl4.fl4_dport = 0;
+	} else {
+		swap(fl4.fl4_sport, fl4.fl4_dport);
 	}
 	//ASUS_BSP+++
         pr_debug("[ROUTE-DBG] Validate reverse path: saddr=%pI4, daddr=%pI4", &fl4.saddr, &fl4.daddr);
