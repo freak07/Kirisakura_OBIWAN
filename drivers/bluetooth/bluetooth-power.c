@@ -28,7 +28,6 @@
 
 #if defined CONFIG_BT_SLIM_QCA6390 || defined CONFIG_BTFM_SLIM_WCN3990
 #include "btfm_slim.h"
-#include "btfm_slim_slave.h"
 #endif
 #include <linux/fs.h>
 
@@ -409,6 +408,7 @@ static int bluetooth_power(int on)
 				goto vdd_rfa2_fail;
 			}
 		}
+#ifndef ASUS_ZS661KS_PROJECT
 		if (bt_power_pdata->bt_vdd_asd) {
 			rc = bt_configure_vreg(bt_power_pdata->bt_vdd_asd);
 			if (rc < 0) {
@@ -416,6 +416,7 @@ static int bluetooth_power(int on)
 				goto vdd_asd_fail;
 			}
 		}
+#endif
 		if (bt_power_pdata->bt_chip_pwd) {
 			rc = bt_configure_vreg(bt_power_pdata->bt_chip_pwd);
 			if (rc < 0) {
@@ -457,9 +458,11 @@ clk_fail:
 		if (bt_power_pdata->bt_chip_pwd)
 			bt_vreg_disable(bt_power_pdata->bt_chip_pwd);
 chip_pwd_fail:
+#ifndef ASUS_ZS661KS_PROJECT
 		if (bt_power_pdata->bt_vdd_asd)
 			bt_vreg_disable(bt_power_pdata->bt_vdd_asd);
 vdd_asd_fail:
+#endif
 		if (bt_power_pdata->bt_vdd_rfa2)
 			bt_vreg_disable(bt_power_pdata->bt_vdd_rfa2);
 vdd_rfa2_fail:
@@ -766,11 +769,11 @@ static int bt_power_populate_dt_pinfo(struct platform_device *pdev)
 		rc = bt_dt_parse_vreg_info(&pdev->dev,
 					&bt_power_pdata->bt_vdd_rfa2,
 					"qca,bt-vdd-rfa2");
-
+#ifndef ASUS_ZS661KS_PROJECT
 		rc = bt_dt_parse_vreg_info(&pdev->dev,
 					&bt_power_pdata->bt_vdd_asd,
 					"qca,bt-vdd-asd");
-
+#endif
 		rc = bt_dt_parse_clk_info(&pdev->dev,
 					&bt_power_pdata->bt_chip_clk);
 	}
@@ -861,18 +864,6 @@ int get_chipset_version(void)
 	return soc_id;
 }
 
-int bt_disable_asd(void)
-{
-	int rc = 0;
-	if (bt_power_pdata->bt_vdd_asd) {
-		BT_PWR_INFO("Disabling ASD regulator");
-		rc = bt_vreg_disable(bt_power_pdata->bt_vdd_asd);
-	} else {
-		BT_PWR_INFO("ASD regulator is not configured");
-	}
-	return rc;
-}
-
 static long bt_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0, pwr_cntrl = 0;
@@ -909,11 +900,6 @@ static long bt_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		BT_PWR_ERR("unified Current SOC Version : %x", chipset_version);
 		if (chipset_version) {
 			soc_id = chipset_version;
-			if (soc_id == QCA_HSP_SOC_ID_0100 ||
-				soc_id == QCA_HSP_SOC_ID_0110 ||
-				soc_id == QCA_HSP_SOC_ID_0200) {
-				ret = bt_disable_asd();
-			}
 		} else {
 			BT_PWR_ERR("got invalid soc version");
 			soc_id = 0;

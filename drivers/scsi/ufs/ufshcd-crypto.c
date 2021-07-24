@@ -336,12 +336,15 @@ int ufshcd_hba_init_crypto_spec(struct ufs_hba *hba,
 	ufshcd_clear_all_keyslots(hba);
 
 	hba->ksm = keyslot_manager_create(hba->dev, ufshcd_num_keyslots(hba),
-					  ksm_ops, crypto_modes_supported, hba);
+					  ksm_ops,
+					  BLK_CRYPTO_FEATURE_STANDARD_KEYS,
+					  crypto_modes_supported, hba);
 
 	if (!hba->ksm) {
 		err = -ENOMEM;
 		goto out_free_caps;
 	}
+	keyslot_manager_set_max_dun_bytes(hba->ksm, sizeof(u64));
 
 	return 0;
 

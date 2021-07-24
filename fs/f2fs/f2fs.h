@@ -139,6 +139,7 @@ struct f2fs_mount_info {
 	int alloc_mode;			/* segment allocation policy */
 	int fsync_mode;			/* fsync policy */
 	bool test_dummy_encryption;	/* test dummy encryption */
+	block_t unusable_cap_perc;	/* percentage for cap */
 #ifdef CONFIG_FS_ENCRYPTION
 	bool inlinecrypt;		/* inline encryption enabled */
 #endif
@@ -3971,12 +3972,8 @@ static inline bool f2fs_force_buffered_io(struct inode *inode,
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 	int rw = iov_iter_rw(iter);
 
-	if (IS_ENABLED(CONFIG_FS_ENCRYPTION) && f2fs_encrypted_file(inode)) {
-		if (!fscrypt_inode_uses_inline_crypto(inode) ||
-		    !IS_ALIGNED(iocb->ki_pos | iov_iter_alignment(iter),
-				F2FS_BLKSIZE))
-			return true;
-	}
+	if (!fscrypt_dio_supported(iocb, iter))
+		return true;
 	if (fsverity_active(inode))
 		return true;
 	if (f2fs_is_multi_device(sbi))

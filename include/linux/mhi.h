@@ -290,6 +290,7 @@ struct mhi_controller {
 
 	/* mhi host manages downloading entire fbc images */
 	bool fbc_download;
+	bool rddm_supported;
 	size_t rddm_size;
 	size_t sbl_size;
 	size_t seg_len;
@@ -354,7 +355,7 @@ struct mhi_controller {
 	/* worker for different state transitions */
 	struct work_struct st_worker;
 	struct work_struct special_work;
-	struct workqueue_struct *special_wq;
+	struct workqueue_struct *wq;
 
 	wait_queue_head_t state_event;
 
@@ -839,6 +840,12 @@ int mhi_get_remote_time_sync(struct mhi_device *mhi_dev,
  * @mhi_cntrl: MHI controller
  */
 enum mhi_dev_state mhi_get_mhi_state(struct mhi_controller *mhi_cntrl);
+
+/**
+ * mhi_get_exec_env - Return execution environment of the device
+ * @mhi_cntrl: MHI controller
+ */
+enum mhi_ee mhi_get_exec_env(struct mhi_controller *mhi_cntrl);
 
 /**
  * mhi_set_mhi_state - Set device state
