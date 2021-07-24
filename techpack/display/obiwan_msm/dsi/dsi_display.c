@@ -27,6 +27,13 @@
 #include <drm/drm_sysfs.h>
 /* ASUS BSP Display --- */
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+#ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
+#include <linux/notification/notification.h>
+#endif
+
 #define to_dsi_display(x) container_of(x, struct dsi_display, host)
 #define INT_BASE_10 10
 
@@ -1407,6 +1414,9 @@ int dsi_display_set_power(struct drm_connector *connector,
 		// set the default AOD backlight to the last backlight
 		if (g_display->panel->asus_last_user_aod_bl != 0)
 			dsi_panel_set_backlight(g_display->panel, g_display->panel->asus_last_user_aod_bl);
+#ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
+		ntf_screen_off();
+#endif
 		break;
 	case SDE_MODE_DPMS_LP2:
 		pr_err("[Display] enter LP2 doze suspend\n");
@@ -1425,6 +1435,9 @@ int dsi_display_set_power(struct drm_connector *connector,
 			g_display->panel->asus_global_hbm_mode = 0;
 		}
 		rc = dsi_panel_set_lp2(display->panel);
+#ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
+		ntf_screen_off();
+#endif
 		break;
 	case SDE_MODE_DPMS_ON:
 		if ((display->panel->power_mode == SDE_MODE_DPMS_LP1 ||
@@ -1450,9 +1463,15 @@ int dsi_display_set_power(struct drm_connector *connector,
 
 		// switch the correct fps from upper layer
 		asus_display_apply_fps_setting();
+#ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
+		ntf_screen_on();
+#endif
 		break;
 	case SDE_MODE_DPMS_OFF:
 	default:
+#ifdef CONFIG_UCI_NOTIFICATIONS_SCREEN_CALLBACKS
+		ntf_screen_off();
+#endif
 		return rc;
 	}
 

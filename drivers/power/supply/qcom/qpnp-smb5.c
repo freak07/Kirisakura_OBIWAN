@@ -872,6 +872,13 @@ static int smb5_parse_dt_voltages(struct smb5 *chip, struct device_node *node)
 
 //ASUS_BSP +++
 struct drm_panel *active_panel_asus;
+#ifdef CONFIG_UCI
+struct drm_panel *uci_get_active_panel(void) {
+	return active_panel_asus;
+}
+EXPORT_SYMBOL(uci_get_active_panel);
+#endif
+
 int smb5_parse_dt_panel(struct smb5 *chip, struct device_node *node)
 {
 	int i;

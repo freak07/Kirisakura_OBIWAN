@@ -22,6 +22,10 @@
 #include <linux/usb/usbpd.h>
 #include "usbpd.h"
 
+#ifdef CONFIG_UCI_NOTIFICATIONS
+#include <linux/notification/notification.h>
+#endif
+
 static bool others_dierct_charger = true;
 module_param(others_dierct_charger, bool, 0644);
 MODULE_PARM_DESC(others_dierct_charger, "allowed others adapter for direct charging");
@@ -4360,6 +4364,25 @@ static int psy_changed(struct notifier_block *nb, unsigned long evt, void *ptr)
 	typec_mode = val.intval;
 	pr_info("[PD] %s: get property: typeC_mode:%d\n", __func__, typec_mode);
 
+#ifdef CONFIG_UCI_NOTIFICATIONS
+	switch (typec_mode) {
+		case POWER_SUPPLY_TYPEC_NONE:
+			if (!pd->in_pr_swap) {
+				ntf_set_charge_state(false);
+			}
+		break;
+		/* Sink states */
+		case POWER_SUPPLY_TYPEC_SOURCE_DEFAULT:
+		case POWER_SUPPLY_TYPEC_SOURCE_MEDIUM:
+		case POWER_SUPPLY_TYPEC_SOURCE_HIGH:
+#ifndef CONFIG_MACH_ASUS_ZS661KS
+			ntf_set_charge_state(true);
+#endif
+		break;
+		default:
+		break;
+	}
+#endif
 	ret = power_supply_get_property(pd->usb_psy,
 			POWER_SUPPLY_PROP_PE_START, &val);
 	if (ret) {

@@ -16,6 +16,31 @@
 #include <linux/slab.h>
 #include "ene_8k41.h"
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#include <linux/notification/notification.h>
+#endif
+
+#ifdef CONFIG_UCI
+static bool breathe_on_strobe = false;
+static bool sec_led_on_strobe = false;
+static bool sec_led_block_proximity = false;
+static bool block_proximity = false;
+static int pwm_divider = 1;
+#define BACK_LED_ALWAYS 0
+#define BACK_LED_FACE_DOWN 1
+#define BACK_LED_NOT_FACE_DOWN 2
+#define BACK_LED_NEVER 3
+static int sec_led_face_down_setting = 0;
+static int primary_led_face_down_setting = 0;
+
+static bool led2_override_on = false;
+static bool breathe_on_strobe_on = false;
+static bool in_proximity = false;
+static bool last_face_down = 0;
+
+#endif
+
 #define FW_PATH "/asusfw/aura_sync/ENE-8K41-aura-V7.bin"
 
 static bool suspend_vdd_on = false;
@@ -71,6 +96,9 @@ static int i2c_write_bytes(struct i2c_client *client, char *write_buf, int write
 	return ret;
 } 
 
+#ifdef CONFIG_UCI
+int ene_8k41_resume(struct device *dev);
+#endif
 static int ene_8k41_read_bytes(struct i2c_client *client, short addr, char *data)
 {
 	int err = 0;
@@ -84,6 +112,17 @@ static int ene_8k41_read_bytes(struct i2c_client *client, short addr, char *data
 	err = i2c_write_bytes(client, buf, 3);	//set register address
 	if (err !=1)
 		printk("[AURA_SYNC] i2c_write_bytes:err %d\n", err);
+#ifdef CONFIG_UCI
+	if (err == -107) {
+		pr_info("%s -107 error, RETRY: resume needed from sleeping...\n",__func__);
+		err = ene_8k41_resume(NULL);
+		pr_info("%s -107 error, RETRY: resume result: %d\n",__func__,err);
+
+		err = i2c_write_bytes(client, buf, 3);	//set register address
+		if (err !=1)
+			printk("[AURA_SYNC] RETRY: i2c_write_bytes:err %d\n", err);
+	}
+#endif
 
 	buf[0] = 0x81;
 	err = i2c_read_bytes(client, buf, 1, data, 1);	//send read command
@@ -106,6 +145,17 @@ static int ene_8k41_write_bytes(struct i2c_client *client, short addr, char valu
 	err = i2c_write_bytes(client, buf, 3);	//set register address
 	if (err !=1)
 		printk("[AURA_SYNC] i2c_write_bytes:err %d\n", err);
+#ifdef CONFIG_UCI
+	if (err == -107) {
+		pr_info("%s -107 error, RETRY: resume needed from sleeping...\n",__func__);
+		err = ene_8k41_resume(NULL);
+		pr_info("%s -107 error, RETRY: resume result: %d\n",__func__,err);
+
+		err = i2c_write_bytes(client, buf, 3);	//set register address
+		if (err !=1)
+			printk("[AURA_SYNC] RETRY: i2c_write_bytes:err %d\n", err);
+	}
+#endif
 
 	buf[0] = 0x01;
 	buf[1] = value;
@@ -455,6 +505,35 @@ static int ene_UpdateFirmware(struct i2c_client *client, char *fw_buf)
 	kfree(buf);
 	return 0;
 }
+#ifdef CONFIG_UCI
+
+static bool should_block_sec_led_proximity(void) {
+	if (!in_proximity) return false;
+	if (sec_led_block_proximity || block_proximity) return true;
+	return false;
+}
+static bool should_block_primary_led_proximity(void) {
+	if (!in_proximity) return false;
+	if (block_proximity) return true;
+	return false;
+}
+
+static bool should_block_sec_led_face_down(void) {
+	if (sec_led_face_down_setting == BACK_LED_ALWAYS) return should_block_sec_led_proximity();
+	if (sec_led_face_down_setting == BACK_LED_FACE_DOWN && last_face_down) return false;
+	if (sec_led_face_down_setting == BACK_LED_NOT_FACE_DOWN && !last_face_down) return should_block_sec_led_proximity();
+	pr_info("%s blocking sec led face down, setting %d face down %d\n",__func__, sec_led_face_down_setting, last_face_down);
+	return true;
+}
+static bool should_block_primary_led_face_down(void) {
+	if (primary_led_face_down_setting == BACK_LED_NEVER) return true;
+	if (primary_led_face_down_setting == BACK_LED_ALWAYS) return should_block_primary_led_proximity();
+	if (primary_led_face_down_setting == BACK_LED_FACE_DOWN && last_face_down) return false;
+	if (primary_led_face_down_setting == BACK_LED_NOT_FACE_DOWN && !last_face_down) return should_block_primary_led_proximity();
+	pr_info("%s blocking sec led face down, setting %d face down %d\n",__func__, primary_led_face_down_setting, last_face_down);
+	return true;
+}
+#endif
 
 void bumper_switch(u32 val)
 {
@@ -467,6 +546,12 @@ void bumper_switch(u32 val)
 	if (CSCmode)
 		printk("[AURA_SYNC] bumper_switch. %d, CSCmode %d\n", val, CSCmode);
 
+#ifdef CONFIG_UCI
+	if (should_block_sec_led_face_down()) {
+		pr_info("%s in proximity, block bumper switch\n",__func__);
+		val = 0;
+	}
+#endif
 	if(val>0) {
 		if(!lid2_status && !CSCmode){
 			printk("[ASUS_SYNC] lid2_status:0x%x, no need open Bumper.\n", lid2_status);
@@ -552,6 +637,12 @@ static ssize_t red_pwm_store(struct device *dev, struct device_attribute *attr, 
 	//printk("[AURA_SYNC] red_pwm_store.\n");
 
 	ret = kstrtou32(buf, 10, &reg_val);
+#ifdef CONFIG_UCI
+	if (pwm_divider>1) {
+		reg_val = reg_val / pwm_divider;
+		pr_info("%s override pwm %u\n",__func__,reg_val);
+	}
+#endif
 	if (ret)
 		return ret;
 
@@ -598,6 +689,12 @@ static ssize_t green_pwm_store(struct device *dev, struct device_attribute *attr
 	//printk("[AURA_SYNC] green_pwm_store.\n");
 
 	ret = kstrtou32(buf, 10, &reg_val);
+#ifdef CONFIG_UCI
+	if (pwm_divider>1) {
+		reg_val = reg_val / pwm_divider;
+		pr_info("%s override pwm %u\n",__func__,reg_val);
+	}
+#endif
 	if (ret)
 		return ret;
 
@@ -644,6 +741,12 @@ static ssize_t blue_pwm_store(struct device *dev, struct device_attribute *attr,
 	//printk("[AURA_SYNC] blue_pwm_store.\n");
 
 	ret = kstrtou32(buf, 10, &reg_val);
+#ifdef CONFIG_UCI
+	if (pwm_divider>1) {
+		reg_val = reg_val / pwm_divider;
+		pr_info("%s override pwm %u\n",__func__,reg_val);
+	}
+#endif
 	if (ret)
 		return ret;
 
@@ -731,14 +834,42 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr, con
 	u32 val;
 	int err = 0;
 	ssize_t ret;
+#ifdef CONFIG_UCI
+	bool keep_led2_on = false;
+	static bool stored_cscmode = false;
+#endif
 
-	//printk("[AURA_SYNC] mode_store.\n");
+	printk("[AURA_SYNC] mode_store.\n");
 	ret = kstrtou32(buf, 10, &val);
+#ifdef CONFIG_UCI
+	if (sec_led_on_strobe && val == 3) {
+		pr_info("%s switch led2 on for sec_led_on_strobe...\n",__func__);
+		bumper_switch(1);
+		keep_led2_on = true;
+		if (!led2_override_on) {
+			stored_cscmode = CSCmode;
+			led2_override_on = true;
+		}
+		CSCmode = true;
+	} else {
+		if (led2_override_on) {
+			CSCmode = stored_cscmode;
+			led2_override_on = false;
+		}
+	}
+	if (breathe_on_strobe && val == 3) {
+		pr_info("%s override strobe to breathe uci \n",__func__);
+		val = 2;
+		breathe_on_strobe_on = true;
+	} else {
+		breathe_on_strobe_on = false;
+	}
+#endif
 	if (ret)
 		return ret;
 
 	mutex_lock(&g_pdata->ene_mutex);
-	//printk("[AURA_SYNC] %s : client->addr : 0x%x,  val : 0x%x.\n", __func__, client->addr, val);
+	printk("[AURA_SYNC] %s : client->addr : 0x%x,  val : 0x%x.\n", __func__, client->addr, val);
 	g_mode = val;
 
 	err = ene_8k41_write_bytes(client, 0x8021, val);
@@ -757,6 +888,9 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr, con
 	if (CSCmode){
 		printk("[AURA_SYNC] CSCmode = 0x%d.\n", CSCmode);
 	} else {
+#ifdef CONFIG_UCI
+		if (!keep_led2_on)
+#endif
 		if (!lid2_status && bumper_enable)
 			bumper_switch(0);
 	}
@@ -1044,6 +1178,12 @@ static ssize_t led_on_store(struct device *dev, struct device_attribute *attr, c
 	ret = kstrtou32(buf, 10, &val);
 	if (ret)
 		return ret;
+#ifdef CONFIG_UCI
+	if (should_block_primary_led_face_down()) {
+		pr_info("%s in proximity, block led on store\n",__func__);
+		val = 0;
+	}
+#endif
 
 	mutex_lock(&g_pdata->ene_mutex);
 	if(val>0) {
@@ -1159,6 +1299,18 @@ static ssize_t led2_on_store(struct device *dev, struct device_attribute *attr, 
 	//__pm_wakeup_event(&ene_wakelock, WAKELOCK_HOLD_TIME);
 
 	ret = kstrtou32(buf, 10, &val);
+#ifdef CONFIG_UCI
+	if (led2_override_on) {
+		pr_info("%s led2 on override...\n",__func__);
+		val = 1;
+	}
+#endif
+#ifdef CONFIG_UCI
+	if (should_block_sec_led_face_down()) {
+		pr_info("%s in proximity, block led2 on store\n",__func__);
+		val = 0;
+	}
+#endif
 	if (ret)
 		return ret;
 
@@ -1167,7 +1319,7 @@ static ssize_t led2_on_store(struct device *dev, struct device_attribute *attr, 
 
 		//printk("[AURA_SYNC] LED ON\n");
 		if (platform_data->aura_front_en != -ENOENT){
-			printk("[AURA_SYNC] LED power on.\n");
+			printk("[AURA_SYNC] LED2 power on.\n");
 			err = gpio_direction_output(platform_data->aura_front_en, 1);
 			if (err)
 				printk("[AURA_SYNC] aura_front_en output high, err %d\n", err);
@@ -1178,7 +1330,7 @@ static ssize_t led2_on_store(struct device *dev, struct device_attribute *attr, 
 		g_led2_on = 0;
 		if (g_led_on == 0) {
 			if (platform_data->aura_front_en != -ENOENT){
-				printk("[AURA_SYNC] LED power off.\n");
+				printk("[AURA_SYNC] LED2 power off.\n");
 				err = gpio_direction_output(platform_data->aura_front_en, 0);
 				if (err)
 					printk("[AURA_SYNC] aura_front_en output high, err %d\n", err);
@@ -1340,8 +1492,16 @@ static ssize_t set_speed(struct device *dev, struct device_attribute *attr, cons
 	int err = 0;
 	ssize_t ret;
 
-	//printk("[AURA_SYNC] set_speed.\n");
+	printk("[AURA_SYNC] set_speed.\n");
 	ret = kstrtou32(buf, 10, &val);
+#ifdef CONFIG_UCI
+	if (breathe_on_strobe_on) {
+		if (val == 0) {
+			val = 254;
+			pr_info("%s override speed from 0 to 254 for breathe_on_strobe...\n",__func__);
+		}
+	}
+#endif
 	if (ret)
 		return ret;
 
@@ -1893,6 +2053,43 @@ static int ene_8k41_parse_dt(struct device *dev, struct ene_8k41_platform_data *
 	return 0;
 }
 
+#ifdef CONFIG_UCI
+#ifdef CONFIG_UCI_NOTIFICATIONS
+static void ntf_listener(char* event, int num_param, char* str_param) {
+        if (strcmp(event,NTF_EVENT_CHARGE_LEVEL) && strcmp(event, NTF_EVENT_INPUT)) {
+                pr_info("%s aura - listener event %s %d %s\n",__func__,event,num_param,str_param);
+        }
+        if (!strcmp(event,NTF_EVENT_PROXIMITY)) { // proximity
+                if (!!num_param) {
+                        in_proximity = true;
+                } else{
+                        in_proximity = false;
+                }
+	}
+}
+#endif
+
+static void uci_user_listener(void) {
+	breathe_on_strobe = !!uci_get_user_property_int_mm("back_led_breathe_on_strobe", 0, 0, 1);
+	sec_led_on_strobe = !!uci_get_user_property_int_mm("back_led_sec_led_on_strobe", 0, 0, 1);
+	sec_led_block_proximity = !!uci_get_user_property_int_mm("back_led_sec_led_block_proximity", 0, 0, 1);
+	block_proximity = !!uci_get_user_property_int_mm("back_led_block_proximity", 0, 0, 1);
+	pwm_divider = uci_get_user_property_int_mm("back_led_pwm_divider", 1, 1, 4);
+	sec_led_face_down_setting = uci_get_user_property_int_mm("back_led_sec_led_face_down_setting", BACK_LED_ALWAYS, BACK_LED_ALWAYS, BACK_LED_NOT_FACE_DOWN);
+	primary_led_face_down_setting = uci_get_user_property_int_mm("back_led_primary_led_face_down_setting", BACK_LED_ALWAYS, BACK_LED_ALWAYS, BACK_LED_NEVER);
+}
+
+static void uci_sys_listener(void) {
+	bool face_down = !!uci_get_sys_property_int_mm("face_down", 0, 0, 1);
+	if (last_face_down!=face_down) {
+		last_face_down = face_down;
+		if (face_down && should_block_sec_led_face_down()) {
+			bumper_switch(0);
+		}
+	}
+}
+#endif
+
 static int ene_8k41_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int err = 0;
@@ -2075,6 +2272,13 @@ if (platform_data->aura_front_en != -ENOENT )
 	g_led_on = 0;
 	g_led2_on = 0;
 
+#ifdef CONFIG_UCI
+	uci_add_user_listener(uci_user_listener);
+	uci_add_sys_listener(uci_sys_listener);
+#ifdef CONFIG_UCI_NOTIFICATIONS
+        ntf_add_listener(ntf_listener);
+#endif
+#endif
 	printk("[AURA_SYNC] ene_8k41_probe done.\n");
 	return 0;
 

@@ -14,6 +14,10 @@
 #include "dsi_ctrl_hw.h"
 #include "dsi_parser.h"
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+
 /**
  * topology is currently defined by a set of following 3 values:
  * 1. num of layer mixers
@@ -495,6 +499,14 @@ static int dsi_panel_set_pinctrl_state(struct dsi_panel *panel, bool enable)
 	return rc;
 }
 
+#ifdef CONFIG_UCI
+static bool screen_is_on = true; // start with true, on/off is set at power off/on only!
+static bool listener_added = false;
+static bool uci_custom_panel_cmds = false;
+static int last_panel_cmd_type = -1;
+static int last_final_panel_cmd_type = -1;
+static void uci_user_listener(void);
+#endif
 
 static int dsi_panel_power_on(struct dsi_panel *panel)
 {
@@ -529,6 +541,9 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 	// ASUS_BSP --- Touch
 
 	dp_panel_resume(); /* ASUS BSP DP +++ */
+#ifdef CONFIG_UCI
+	screen_is_on = true;
+#endif
 
 	goto exit;
 
@@ -599,6 +614,9 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 
 	asus_var_regulator_last_on = false;
 
+#ifdef CONFIG_UCI
+	screen_is_on = false;
+#endif
 
 	return rc;
 }
@@ -739,6 +757,16 @@ static int dsi_panel_wled_register(struct dsi_panel *panel,
 	return 0;
 }
 
+#ifdef CONFIG_UCI
+
+struct dsi_panel *g_panel = NULL;
+static int backlight_min = 120;
+static bool backlight_dimmer = false;
+static u32 last_brightness;
+static bool first_brightness_set = false;
+
+#endif
+
 int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 {
 	int backlight_converted = bl_lvl;
@@ -753,12 +781,22 @@ int asus_display_convert_backlight(struct dsi_panel *panel, int bl_lvl)
 			backlight_converted = asus_alpm_bl_low;
 			pr_err("[Display] convert to %d, reason AOD\n", asus_alpm_bl_low);
 		}
+#ifndef CONFIG_UCI
 	} else if (bl_lvl < 400 && !has_pxlw_video_blocker) {
+#else
+	} else if (bl_lvl < 400 && (!has_pxlw_video_blocker && !backlight_dimmer)) {
+#endif
 		pr_err("[Display] convert to 400, reason pixelworks\n");
 		backlight_converted = 400;
+#ifndef CONFIG_UCI
 	} else if (has_pxlw_video_blocker) {
 		pr_err("[Display] do not convert backlight, reason pixelworks video blocker\n");
 	}
+#else
+	} else if (has_pxlw_video_blocker || backlight_dimmer) {
+		pr_err("[Display] do not convert backlight, reason pixelworks video blocker %d|| backlight_dimmer %d\n",has_pxlw_video_blocker,backlight_dimmer);
+	}
+#endif
 
 	return backlight_converted;
 }
@@ -774,6 +812,12 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_UCI
+	if (!listener_added) {
+		uci_add_user_listener(uci_user_listener);
+		listener_added = true;
+	}
+#endif
 	pr_err("[Display] request bl=%d\n", bl_lvl);
 
 	/* ASUS BSP DP, bl for station +++ */
@@ -789,6 +833,49 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	/* ASUS BSP DP, bl for station --- */
 
 	bl_lvl = asus_display_convert_backlight(panel, bl_lvl);
+#ifdef CONFIG_UCI
+	last_brightness= lastBL;
+	first_brightness_set = true;
+	if (g_panel == NULL) g_panel = panel;
+
+#if 0
+	if (backlight_dimmer && !has_pxlw_video_blocker) {
+		// with new framework, instead of pulling level down, we should keep it to the minimum,
+			// otherwise it's too dark and crushed.
+		if (bl_lvl<backlight_min) {
+			bl_lvl = backlight_min;
+		}
+	}
+#endif
+#if 1
+// new framework clashes with this, needs revised algo... since .70 framework
+	if (backlight_dimmer) {
+		if (bl_lvl <= 498) {
+			int range =  498 - 402; // 96
+			int v_dec = range - (bl_lvl - 402); // 96 - 0
+			int v_inc = bl_lvl - 402; // 0 - 96
+			int calc_added_bl_min = (backlight_min * v_dec) / range; // backlight min - 0
+			int c = calc_added_bl_min + (v_inc * 4); // backlight_min -> 96*4 (~384)
+
+			if (c<backlight_min) c = backlight_min;
+			bl_lvl = c;
+		}
+/*        if (bl_lvl == 498)
+                bl_lvl = 380 ;
+        if (bl_lvl == 482)
+                bl_lvl = 300;
+        if (bl_lvl == 466)
+                bl_lvl = 200;
+        if (bl_lvl == 450)
+                bl_lvl = 100;
+        if (bl_lvl == 434)
+                bl_lvl = 50;
+        if (bl_lvl == 402)
+                bl_lvl = backlight_min;
+*/
+	}
+#endif
+#endif
 
 	dsi = &panel->mipi_device;
 
@@ -1892,6 +1979,13 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"asus,bus-qrcode-dim-mode-120fps-command",
 	"asus,bus-qrcode-dim-mode-90fps-command",
 	"asus,bus-qrcode-dim-mode-60fps-command",
+#ifdef CONFIG_UCI
+	"qcom,mdss-dsi-switch-160fps-custom1-command",
+	"qcom,mdss-dsi-switch-144fps-custom1-command",
+	"qcom,mdss-dsi-switch-120fps-custom1-command",
+	"qcom,mdss-dsi-switch-90fps-custom1-command",
+	"qcom,mdss-dsi-switch-60fps-custom1-command",
+#endif
 	/* ASUS BSP Display --- */
 };
 
@@ -1937,6 +2031,13 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"asus,bus-qrcode-dim-mode-command-state",
 	"asus,bus-qrcode-dim-mode-command-state",
 	"asus,bus-qrcode-dim-mode-command-state",
+#ifdef CONFIG_UCI
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+	"qcom,mdss-dsi-switch-fps-command-state",
+#endif
 	/* ASUS BSP Display --- */
 };
 
@@ -2051,6 +2152,32 @@ static int dsi_panel_parse_cmd_sets_sub(struct dsi_panel_cmd_set *cmd,
 
 	data = utils->get_property(utils->data, cmd_set_prop_map[type],
 			&length);
+#ifdef CONFIG_UCI
+	if (!data && (type == DSI_CMD_SET_160_C1 || type == DSI_CMD_SET_144_C1 || type == DSI_CMD_SET_120_C1 || type == DSI_CMD_SET_90_C1 || type == DSI_CMD_SET_60_C1)) {
+		// handle the case when no cmd was found (stock dtbo), fall back to stock cmd type...
+		switch (type) {
+			case DSI_CMD_SET_160_C1:
+				type = DSI_CMD_SET_160;
+				break;
+			case DSI_CMD_SET_144_C1:
+				type = DSI_CMD_SET_144;
+				break;
+			case DSI_CMD_SET_120_C1:
+				type = DSI_CMD_SET_120;
+				break;
+			case DSI_CMD_SET_90_C1:
+				type = DSI_CMD_SET_90;
+				break;
+			case DSI_CMD_SET_60_C1:
+				type = DSI_CMD_SET_60;
+				break;
+			default:
+				break;
+		}
+		data = utils->get_property(utils->data, cmd_set_prop_map[type],
+			&length);
+	}
+#endif
 	if (!data) {
 		DSI_DEBUG("%s commands not defined\n", cmd_set_prop_map[type]);
 		rc = -ENOTSUPP;
@@ -4555,6 +4682,66 @@ int dsi_panel_mode_switch_to_vid(struct dsi_panel *panel)
 	return rc;
 }
 
+#ifdef CONFIG_UCI
+int force_panel_fps = 0;
+
+int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type);
+
+static void uci_user_listener(void) {
+	bool call_switch_fps = false;
+	{
+		int new_force_panel_fps = uci_get_user_property_int_mm("force_panel_fps", 0, 0, 4);
+		if (new_force_panel_fps!=force_panel_fps) {
+			force_panel_fps = new_force_panel_fps;
+			call_switch_fps = true;
+		}
+	}
+        {
+                bool change = false;
+                int on = backlight_dimmer?1:0;
+                int backlight_min_curr = backlight_min;
+
+                backlight_min = uci_get_user_property_int_mm("backlight_min", backlight_min, 5, 250);
+                on = !!uci_get_user_property_int_mm("backlight_dimmer", on, 0, 1);
+
+                if (on != backlight_dimmer || backlight_min_curr != backlight_min) change = true;
+
+                backlight_dimmer = on;
+
+                if (first_brightness_set && change) {
+			if (g_panel != NULL && screen_is_on) {
+				if (g_panel->power_mode == SDE_MODE_DPMS_ON) {
+					if (mutex_trylock(&g_panel->panel_lock)) {
+						dsi_panel_update_backlight(g_panel, last_brightness);
+						mutex_unlock(&g_panel->panel_lock);
+					}
+				}
+                        }
+                }
+        }
+	{
+		bool new_uci_custom_panel_cmds = !!uci_get_user_property_int_mm("replace_gamma_table", 0, 0, 1);
+		if (new_uci_custom_panel_cmds != uci_custom_panel_cmds) {
+			uci_custom_panel_cmds = new_uci_custom_panel_cmds;
+			call_switch_fps = true;
+		}
+	}
+	if (call_switch_fps) {
+		if (g_panel != NULL && screen_is_on && last_panel_cmd_type>=0) {
+			// only do this, when first panel fps was already set, and we know the last panel cmd type...
+			//  force fps switch to set issue panel cmd for custom tweaks
+			if (last_final_panel_cmd_type==4) { // do not re-run the cmd for 160hz while panel is on, it causes inverted colors.first switch to 144hz
+				int stored_fps = force_panel_fps;
+				force_panel_fps = 0; // switch off forcing...
+				dsi_panel_asus_switch_fps(g_panel, 3); // 144hz
+				force_panel_fps = stored_fps; // switch back forcing
+			}
+			dsi_panel_asus_switch_fps(g_panel, last_panel_cmd_type);
+		}
+	}
+}
+#endif
+
 int dsi_panel_switch(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -4777,6 +4964,45 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 
 	mutex_lock(&panel->panel_lock);
 
+#ifdef CONFIG_UCI
+	last_panel_cmd_type = type; // save the stock value...
+	if (
+		(type == 2 && force_panel_fps > 0) || // 60 FPS -> 90 FPS+
+		(type == 1 && force_panel_fps > 1) || // 90 FPS -> 120 FPS+
+		(type == 0 && force_panel_fps > 2) || // 120 FPS -> 144 FPS+
+		(type == 3 && force_panel_fps > 3) // 144 FPS -> 160 FPS
+		)
+	{
+		if (force_panel_fps) {
+			if (force_panel_fps == 1) {
+				type = 1;
+			}
+			if (force_panel_fps == 2) {
+				type = 0;
+			}
+			if (force_panel_fps == 3) {
+				type = 3;
+			}
+			if (force_panel_fps == 4) {
+				type = 4;
+			}
+			printk("[cleanslate] [Display] override - set panel fps cmd, type %d\n", type);
+		}
+	}
+	last_final_panel_cmd_type = type; // save the tweaked value...
+	if (uci_custom_panel_cmds) {
+	if (type == 2)
+		cmd_type = DSI_CMD_SET_60_C1;
+	else if (type == 1)
+		cmd_type = DSI_CMD_SET_90_C1;
+	else if (type == 0)
+		cmd_type = DSI_CMD_SET_120_C1;
+	else if (type == 3)
+		cmd_type = DSI_CMD_SET_144_C1;
+	else if (type == 4)
+		cmd_type = DSI_CMD_SET_160_C1;
+	} else {
+#endif
 	if (type == 2)
 		cmd_type = DSI_CMD_SET_60;
 	else if (type == 1)
@@ -4787,6 +5013,9 @@ int dsi_panel_asus_switch_fps(struct dsi_panel *panel, int type)
 		cmd_type = DSI_CMD_SET_144;
 	else if (type == 4)
 		cmd_type = DSI_CMD_SET_160;
+#ifdef CONFIG_UCI
+	}
+#endif
 
 	rc = dsi_panel_tx_cmd_set(panel, cmd_type);
 	if (rc) {

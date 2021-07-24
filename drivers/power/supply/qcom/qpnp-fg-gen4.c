@@ -21,6 +21,10 @@
 #include "fg-reg.h"
 #include "fg-alg.h"
 
+#ifdef CONFIG_UCI_NOTIFICATIONS
+#include <linux/notification/notification.h>
+#endif
+
 //ASUS BSP add include files +++
 #include <linux/proc_fs.h>
 #include <linux/pm_wakeup.h>
@@ -8609,6 +8613,9 @@ static int print_battery_status(void)
 	fg_gen4_get_charge_counter(g_fgChip, &cSoc);
 	fg_get_sram_prop(g_fgDev, FG_SRAM_OCV, &ocv);
 
+#ifdef CONFIG_UCI
+	ntf_set_charge_level(bat_cap);
+#endif
 	snprintf(battInfo, sizeof(battInfo), "report Capacity ==>%d, FCC:%dmAh, BMS:%d, V:%dmV, Cur:%dmA, ",
 		bat_cap,
 		(int)g_fgChip->cl->nom_cap_uah/1000,

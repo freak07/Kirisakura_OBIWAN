@@ -23,6 +23,10 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_UCI
+#include <linux/uci/uci.h>
+#endif
+
 #define REG_SIZE_PER_LPG	0x100
 #define LPG_BASE		"lpg-base"
 #define LUT_BASE		"lut-base"
@@ -612,6 +616,47 @@ static int qpnp_lpg_set_sdam_ramp_config(struct qpnp_lpg_channel *lpg)
 
 	return rc;
 }
+#ifdef CONFIG_UCI
+static u32 uci_lut_patterns[5][20] = {
+    { 20,40,50, 70,100, 70,50,40,20,10,		0,0,0,0,0,0,0,0,0,0}, // normal
+    { 12,23,36, 50, 64, 80,90,95,100,95,	85,74,64,50,40,33,22,10,0,0}, // oneplus5
+    {100,10,100,10,100, 0, 0, 0, 0, 0,		50,10,50,10,50,0,0,0,0,0}, // triple
+    { 10, 0, 20, 0, 60, 0, 0, 0, 0, 0,		10,0,38,0,100,0,0,0,0,0}, // triple up
+    {100, 0, 28, 0, 10, 0, 0, 0, 0, 0,		60,0,20,0,10,0,0,0,0,0}}; // triple down
+
+static bool bln_rgb_pulse = false;
+static int bln_rgb_pulse_pattern = 0;
+static int bln_rgb_light_level = 0;
+
+struct qpnp_lpg_channel *g_lpg = NULL;
+
+static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
+		unsigned int *pattern, unsigned int length);
+
+static void uci_user_listener(void) {
+	int new_bln_rgb_pulse_pattern = uci_get_user_property_int_mm("bln_rgb_pulse_pattern", 0, 0, 4);
+	bool new_bln_rgb_pulse = !!uci_get_user_property_int_mm("bln_rgb_pulse", 0, 0, 1);
+	int new_bln_rgb_light_level = uci_get_user_property_int_mm("bln_rgb_light_level", 0, 0, 20);
+
+	if (new_bln_rgb_pulse_pattern!=bln_rgb_pulse_pattern || new_bln_rgb_pulse!=bln_rgb_pulse || new_bln_rgb_light_level!=bln_rgb_light_level) {
+
+		bln_rgb_pulse_pattern = new_bln_rgb_pulse_pattern;
+		bln_rgb_pulse = new_bln_rgb_pulse;
+		bln_rgb_light_level = new_bln_rgb_light_level;
+
+		if (g_lpg!=NULL) qpnp_lpg_set_lut_pattern(g_lpg,NULL,20);
+	}
+}
+
+static bool fully_charged_pattern = false;
+
+void uci_led_set_fully_charged_pattern(bool on) {
+	fully_charged_pattern = on;
+	if (g_lpg!=NULL) qpnp_lpg_set_lut_pattern(g_lpg,NULL,20);
+}
+EXPORT_SYMBOL(uci_led_set_fully_charged_pattern);
+
+#endif
 
 static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
 		unsigned int *pattern, unsigned int length)
@@ -623,6 +668,50 @@ static int qpnp_lpg_set_lut_pattern(struct qpnp_lpg_channel *lpg,
 
 	if (lpg->chip->use_sdam)
 		return qpnp_lpg_set_sdam_lut_pattern(lpg, pattern, length);
+
+#ifdef CONFIG_UCI
+	if (lpg->chip->dev->of_node->full_name!=NULL && strstr(lpg->chip->dev->of_node->full_name,"qcom,pwms"))
+	{
+		if (g_lpg==NULL) g_lpg = lpg;
+		if (bln_rgb_pulse && !fully_charged_pattern) {
+			u32 calc_pattern[20] = {20,40,50,100,60,40,20,10,0,0,0,0,0,0,0,0,0,0,0,0};
+			dev_err(lpg->chip->dev, "%s [cleanslate] new pattern length - override - dev: %s full: %s\n",__func__, lpg->chip->dev->of_node->name, lpg->chip->dev->of_node->full_name);
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (uci_lut_patterns[bln_rgb_pulse_pattern][i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		} else
+		if (fully_charged_pattern) {
+			u32 calc_pattern[20] = {10,40,60,70,80,90,100,70,40,20,0,10,30,80,90,100,70,40,20,10};
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (calc_pattern[i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] BLINK pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		} else
+		{
+			u32 calc_pattern[20] = {100,100,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+			{
+				int i=0;
+				for (i=0;i<20;i++) {
+					calc_pattern[i] = (calc_pattern[i])/((bln_rgb_light_level*2)+1);
+					pr_info("%s [cleanslate] BLINK pattern %u -- calc[%u] = %u\n",__func__,bln_rgb_pulse_pattern,i,calc_pattern[i]);
+				}
+			}
+			pattern = calc_pattern;
+			length = 20;
+		}
+	}
+#endif
 
 	if (length > lpg->max_pattern_length) {
 		dev_err(lpg->chip->dev, "new pattern length (%d) larger than predefined (%d)\n",
@@ -1732,6 +1821,9 @@ static int qpnp_lpg_probe(struct platform_device *pdev)
 		dev_err(chip->dev, "Add pwmchip failed, rc=%d\n", rc);
 		goto err_out;
 	}
+#ifdef CONFIG_UCI
+        uci_add_user_listener(uci_user_listener);
+#endif
 
 	return 0;
 err_out:

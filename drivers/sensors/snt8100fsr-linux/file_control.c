@@ -864,6 +864,10 @@ void grip_enable_func_noLock(int val){
 	//mutex_unlock(&snt8100fsr_g->ap_lock);
 }
 
+#ifdef CONFIG_UCI
+extern void if_report_squeeze_event(unsigned long timestamp, bool vibration, int num_param);
+#endif
+
 void grip_raw_enable_func(int val){
 	int ret;
 	uint16_t RegRead_t = 0;
@@ -873,6 +877,15 @@ void grip_raw_enable_func(int val){
 	}
 	
 	MUTEX_LOCK(&snt8100fsr_g->ap_lock);
+	PRINT_INFO("val = %d", val);
+#ifdef CONFIG_UCI
+	// TODO grip_raw_enable_func -> report to inputfilter
+	if (!!val) {
+		if_report_squeeze_event(jiffies, true, 1);
+	} else {
+		if_report_squeeze_event(jiffies, false, 0);
+	}
+#endif
 	if(grip_status_g->G_RAW_EN == val){
 		mutex_unlock(&snt8100fsr_g->ap_lock);
 		return;

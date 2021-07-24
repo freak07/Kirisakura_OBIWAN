@@ -29,6 +29,10 @@
 
 #include "goodix_ts_core.h"
 
+#ifdef CONFIG_UCI
+#include <linux/inputfilter/sweep2sleep.h>
+#endif
+
 #define GOOIDX_INPUT_PHYS	"goodix_ts/input0"
 #define PINCTRL_STATE_ACTIVE    "pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND   "pmx_ts_suspend"
@@ -2799,10 +2803,25 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 		if (core_data->aod_test_mode == 0) {
 			input_mt_slot(dev, i);
 			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
+#ifdef CONFIG_UCI
+                        {
+                                int x2, y2;
+                                bool frozen_coords = s2s_freeze_coords(&x2,&y2,touch_data->coords[i].x,touch_data->coords[i].y);
+                                if (frozen_coords) {
+                                        input_report_abs(dev, ABS_MT_POSITION_X, x2);
+                                        input_report_abs(dev, ABS_MT_POSITION_Y, y2);
+				} else {
+#endif
+
 			input_report_abs(dev, ABS_MT_POSITION_X,
 					 touch_data->coords[i].x);
 			input_report_abs(dev, ABS_MT_POSITION_Y,
 					 touch_data->coords[i].y);
+#ifdef CONFIG_UCI
+				}
+			}
+#endif
+
 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
 					 touch_data->coords[i].w);
 			input_report_abs(dev, ABS_MT_PRESSURE,
@@ -2856,10 +2875,23 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 				if(!(((key_o_sync == true) || (aod_press == true)) && (key_i == i))){
 					input_mt_slot(dev, i);
 					input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
+#ifdef CONFIG_UCI
+                        {
+                                int x2, y2;
+                                bool frozen_coords = s2s_freeze_coords(&x2,&y2,touch_data->coords[i].x,touch_data->coords[i].y);
+                                if (frozen_coords) {
+                                        input_report_abs(dev, ABS_MT_POSITION_X, x2);
+                                        input_report_abs(dev, ABS_MT_POSITION_Y, y2);
+				} else {
+#endif
 					input_report_abs(dev, ABS_MT_POSITION_X,
 							 touch_data->coords[i].x);
 					input_report_abs(dev, ABS_MT_POSITION_Y,
 							 touch_data->coords[i].y);
+#ifdef CONFIG_UCI
+				}
+			}
+#endif
 					input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
 							 touch_data->coords[i].w);
 					input_report_abs(dev, ABS_MT_PRESSURE,
@@ -2908,10 +2940,23 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 			if(!(((key_o_sync == true) || (aod_press == true)) && (key_i == i))){
 				input_mt_slot(dev, i);
 				input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
+#ifdef CONFIG_UCI
+                        {
+                                int x2, y2;
+                                bool frozen_coords = s2s_freeze_coords(&x2,&y2,touch_data->coords[i].x,touch_data->coords[i].y);
+                                if (frozen_coords) {
+                                        input_report_abs(dev, ABS_MT_POSITION_X, x2);
+                                        input_report_abs(dev, ABS_MT_POSITION_Y, y2);
+				} else {
+#endif
 				input_report_abs(dev, ABS_MT_POSITION_X,
 						 touch_data->coords[i].x);
 				input_report_abs(dev, ABS_MT_POSITION_Y,
 						 touch_data->coords[i].y);
+#ifdef CONFIG_UCI
+				}
+			}
+#endif
 				input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
 						 touch_data->coords[i].w);
 				input_report_abs(dev, ABS_MT_PRESSURE,
