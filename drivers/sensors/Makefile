@@ -20,4 +20,4 @@ endif #####ifdef ZS661KS
 ifeq ($(ASUS_FTM), y)
 KBUILD_CFLAGS += -DFACTORY_FLAG=1
 endif
-endif
+
