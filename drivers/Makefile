@@ -205,17 +205,6 @@ ifdef CONFIG_MACH_ASUS_ZS661KS
 obj-y				+= aura_sync/
 endif
 
-#Tuxera
-ifdef CONFIG_MACH_ASUS_ZS661KS
-	ifeq ($(CONFIG_TUXERA_USERDEBUG),y)
-		obj-y				+= tuxera/zs661ks/exfat/userdebug/
-		obj-y				+= tuxera/zs661ks/ntfs/userdebug/
-	else
-		obj-y				+= tuxera/zs661ks/exfat/user/
-		obj-y				+= tuxera/zs661ks/ntfs/user/
-	endif
-endif
-
 ifdef CONFIG_MACH_ASUS_ZS661KS
 obj-y				+= ec_hid_driver/
 obj-y				+= gamepad_hid_driver/

@@ -236,16 +236,6 @@ source "drivers/energy_model/Kconfig"
 # Awinic Vibrator
 source "drivers/motor/tspdrv_aw8697/Kconfig"
 
-source "drivers/tuxera/Kconfig"
-
-source "drivers/tuxera/zs661ks/exfat/user/Kconfig"
-
-source "drivers/tuxera/zs661ks/exfat/userdebug/Kconfig"
-
-source "drivers/tuxera/zs661ks/ntfs/user/Kconfig"
-
-source "drivers/tuxera/zs661ks/ntfs/userdebug/Kconfig"
-
 source "drivers/gamepad_hid_driver/Kconfig"
 
 source "techpack/data/drivers/Kconfig"
