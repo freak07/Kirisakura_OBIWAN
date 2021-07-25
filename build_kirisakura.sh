@@ -4,50 +4,37 @@ echo
 echo "Clean Build Directory"
 echo 
 
-#make clean && make mrproper
-rm -rf ./out_lld
+make clean && make mrproper
 
 echo
 echo "Issue Build Commands"
 echo
 
-mkdir -p out_lld
+mkdir -p out
 export ARCH=arm64
 export SUBARCH=arm64
-BASE_PATH=/home/miles/Android_Build/Clang_Google/linux-x86/
-EXT_UTILS=$BASE_PATH/wahoo-kernel-tools/bin
-export CLANG_PATH_LIB=$BASE_PATH/clang-r416183/lib64
-export CLANG_PATH=$BASE_PATH/clang-r416183/bin
-export PATH=${CLANG_PATH}:${EXT_UTILS}:${PATH}
-export DTC_EXT=$EXT_UTILS/dtc-aosp
-
-export KMI_GENERATION=0
-export CROSS_COMPILE=$BASE_PATH/gas-linux-x86/aarch64-linux-gnu-
-#export CROSS_COMPILE_ARM32=$BASE_PATH/gas-linux-x86/arm-linux-gnueabi-
-#export CROSS_COMPILE_COMPAT=$CROSS_COMPILE_ARM32
-export LLVM=1
-
-LD_LIBRARY_PATH=$CLANG_PATH_LIB:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH
-
-export CC=$CLANG_PATH/clang
-export LD=$CLANG_PATH/ld.lld
+export CLANG_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r416183b1/bin
+export CLANG_BIN_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r416183b1/bin
+export PATH=${CLANG_PATH}:${PATH}
+export DTC_EXT=/home/miles/Downloads/DU_Tools/dtc-aosp
 export CLANG_TRIPLE=aarch64-linux-gnu-
+export CROSS_COMPILE=~/Android_Build/GCC_Google_Arm64/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+export CROSS_COMPILE_COMPAT=~/Android_Build/GCC_Google_Arm32/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
+# export LD_LIBRARY_PATH=~/Android_Build/Clang_Google/linux-x86/clang-r383902c/lib64:$LD_LIBRARY_PATH
 
-echo "Generating binary conversions"
-#cd binaries
-#./convert
-#cd ..
+export CLANG_AR=$CLANG_BIN_PATH/llvm-ar
+export CLANG_CC=$CLANG_BIN_PATH/clang
+export CLANG_LD=$CLANG_BIN_PATH/ld.lld
+export CLANG_LDLTO=$CLANG_BIN_PATH/ld.lld
+export CLANG_NM=$CLANG_BIN_PATH/llvm-nm
 
 echo
 echo "Set DEFCONFIG"
 echo 
-
-make O=out_lld kirisakura_defconfig
-
+make CC=$CLANG_CC LD=$CLANG_LD LDLTO=$CLANG_LD AR=$CLANG_AR NM=$CLANG_NM OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip O=out kirisakura_defconfig
 
 echo
 echo "Build The Good Stuff"
 echo 
 
-make O=out_lld -j24
+make CC=$CLANG_CC LD=$CLANG_LD LDLTO=$CLANG_LD AR=$CLANG_AR NM=$CLANG_NM OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip O=out -j24
