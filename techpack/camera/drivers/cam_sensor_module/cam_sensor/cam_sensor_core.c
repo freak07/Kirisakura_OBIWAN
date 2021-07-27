@@ -13,6 +13,11 @@
 #include "cam_packet_util.h"
 #include "asus_cam_sensor.h"
 
+#ifdef CONFIG_UCI
+#include <linux/notification/notification.h>
+#endif
+
+
 static void cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_packet *csl_packet)
@@ -869,6 +874,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 			"CAM_ACQUIRE_DEV Success, sensor_id:0x%x,sensor_slave_addr:0x%x",
 			s_ctrl->sensordata->slave_info.sensor_id,
 			s_ctrl->sensordata->slave_info.sensor_slave_addr);
+#ifdef CONFIG_UCI
+		ntf_camera_started();
+#endif
 	}
 		break;
 	case CAM_RELEASE_DEV: {
@@ -922,6 +930,9 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		s_ctrl->streamon_count = 0;
 		s_ctrl->streamoff_count = 0;
 		s_ctrl->last_flush_req = 0;
+#ifdef CONFIG_UCI
+		ntf_camera_stopped();
+#endif
 	}
 		break;
 	case CAM_QUERY_CAP: {
