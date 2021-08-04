@@ -419,7 +419,7 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv)
 				snprintf(path, PATH_MAX, "%s", "/vendor/firmware/amss20.bin");
 				dev_err(device, "[wlan] Try to load firmware : %s \n", path);
 		}
-		if (!strncmp(fw_priv->fw_name, "qca6390/regdb", 14)) {
+		if (!strncmp(fw_priv->fw_name, "qca6390/regdb", 13)) {
 				snprintf(path, PATH_MAX, "%s", "/vendor/firmware/regdb.bin");
 				dev_err(device, "[wlan] Try to load firmware : %s \n", path);
 		}
