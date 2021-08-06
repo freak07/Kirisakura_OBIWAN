@@ -146,6 +146,7 @@
  *
  *  Use this if your architecture lacks an efficient flush_tlb_range().
  */
+#define HAVE_GENERIC_MMU_GATHER
 
 #ifdef CONFIG_HAVE_RCU_TABLE_FREE
 /*
