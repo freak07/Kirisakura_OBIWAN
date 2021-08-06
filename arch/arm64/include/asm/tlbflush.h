@@ -156,28 +156,25 @@ static inline void flush_tlb_page(struct vm_area_struct *vma,
  * This is meant to avoid soft lock-ups on large TLB flushing ranges and not
  * necessarily a performance improvement.
  */
-#define MAX_TLBI_OPS	1024UL
+#define MAX_TLB_RANGE	(1024UL << PAGE_SHIFT)
 
 static inline void __flush_tlb_range(struct vm_area_struct *vma,
 				     unsigned long start, unsigned long end,
-				     unsigned long stride, bool last_level)
+				     bool last_level)
 {
 	unsigned long asid = ASID(vma->vm_mm);
 	unsigned long addr;
 
-	if ((end - start) > (MAX_TLBI_OPS * stride)) {
+	if ((end - start) > MAX_TLB_RANGE) {
 		flush_tlb_mm(vma->vm_mm);
 		return;
 	}
-
-	/* Convert the stride into units of 4k */
-	stride >>= 12;
 
 	start = __TLBI_VADDR(start, asid);
 	end = __TLBI_VADDR(end, asid);
 
 	dsb(ishst);
-	for (addr = start; addr < end; addr += stride) {
+	for (addr = start; addr < end; addr += 1 << (PAGE_SHIFT - 12)) {
 		if (last_level) {
 			__tlbi(vale1is, addr);
 			__tlbi_user(vale1is, addr);
@@ -196,14 +193,14 @@ static inline void flush_tlb_range(struct vm_area_struct *vma,
 	 * We cannot use leaf-only invalidation here, since we may be invalidating
 	 * table entries as part of collapsing hugepages or moving page tables.
 	 */
-	__flush_tlb_range(vma, start, end, PAGE_SIZE, false);
+	__flush_tlb_range(vma, start, end, false);
 }
 
 static inline void flush_tlb_kernel_range(unsigned long start, unsigned long end)
 {
 	unsigned long addr;
 
-	if ((end - start) > (MAX_TLBI_OPS * PAGE_SIZE)) {
+	if ((end - start) > MAX_TLB_RANGE) {
 		flush_tlb_all();
 		return;
 	}
