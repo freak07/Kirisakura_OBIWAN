@@ -59,7 +59,7 @@ extern int lid2_status;
 extern bool g_Charger_mode;
 
 #define WAKELOCK_HOLD_TIME 200 /* in ms */
-//static struct wakeup_source ene_wakelock;
+static struct wakeup_source ene_wakelock;
 
 static int i2c_read_bytes(struct i2c_client *client, char *write_buf, int writelen, char *read_buf, int readlen)
 {
@@ -1296,7 +1296,7 @@ static ssize_t led2_on_store(struct device *dev, struct device_attribute *attr, 
 	u32 val;
 	ssize_t ret;
 	int err = 0;
-	//__pm_wakeup_event(&ene_wakelock, WAKELOCK_HOLD_TIME);
+	__pm_wakeup_event(&ene_wakelock, WAKELOCK_HOLD_TIME);
 
 	ret = kstrtou32(buf, 10, &val);
 #ifdef CONFIG_UCI
@@ -1926,7 +1926,7 @@ static void aura_resume_work(struct work_struct *work)
 	int i=0;
 	u8 tmp=0;
 
-	//__pm_stay_awake(&g_pdata->aura_wake_lock);
+	__pm_stay_awake(&g_pdata->aura_wake_lock);
 	// Enable Bumper if in need
 	if(bumper_enable){
 		printk("[AURA_SYNC] aura_resume_work to enable bumper LED\n");
@@ -1946,12 +1946,15 @@ static void aura_resume_work(struct work_struct *work)
 				break;
 			}
 		}
-
+	if(lid2_status) {
+		printk("[ASUS_SYNC] lid2_status:0x%x, open Bumper.\n", lid2_status);
 		bumper_switch(1);
+	} else
+		printk("[ASUS_SYNC] lid2_status:0x%x, no need open Bumper.\n", lid2_status);
 		//if ((g_ASUS_hwID >= ZS660KL_EVB && g_ASUS_hwID < ZS660KL_ER2) || (g_ASUS_hwID >= ZS660KL_CN_EVB && g_ASUS_hwID < ZS660KL_CN_ER2))
 			//bumper_vdd_switch(1);
 	}
-	//__pm_relax(&g_pdata->aura_wake_lock);
+	__pm_relax(&g_pdata->aura_wake_lock);
 }
 
 // Check FW work
@@ -2240,8 +2243,8 @@ if (platform_data->aura_front_en != -ENOENT )
 
 // Init wake lock
 	//wake_lock_init(&platform_data->aura_wake_lock, WAKE_LOCK_SUSPEND, "aura_wake_lock");
-	//wakeup_source_init(&platform_data->aura_wake_lock, "aura_wake_lock");
-	//wakeup_source_init(&ene_wakelock, "ene_wakelock");
+	wakeup_source_init(&platform_data->aura_wake_lock, "aura_wake_lock");
+	wakeup_source_init(&ene_wakelock, "ene_wakelock");
 
 //#ifdef ASUS_FTM
 #if 0

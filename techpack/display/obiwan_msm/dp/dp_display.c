@@ -296,8 +296,7 @@ bool dp_display_is_enable(void) {
 	struct dp_display_private *dp = container_of(g_dp_display,
 			struct dp_display_private, dp_display);
 
-	return dp_display_state_is(DP_STATE_CONFIGURED) &&
-			dp_display_state_is(DP_STATE_ENABLED);
+	return dp_display_state_is(DP_STATE_CONFIGURED);
 }
 
 void dp_panel_suspend(void) {

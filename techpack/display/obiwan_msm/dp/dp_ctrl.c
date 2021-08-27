@@ -90,6 +90,8 @@ enum notification_status {
 	NOTIFY_DISCONNECT_IRQ_HPD,
 };
 
+extern bool dp_asus_is_station(void);
+
 static void dp_ctrl_idle_patterns_sent(struct dp_ctrl_private *ctrl)
 {
 	DP_DEBUG("idle_patterns_sent\n");
@@ -365,6 +367,13 @@ static int dp_ctrl_link_training_1(struct dp_ctrl_private *ctrl)
 			ret = -EINVAL;
 		else
 			break;
+
+		// skip clock recovery if in station mode
+		if (dp_asus_is_station()) {
+			printk("[drm-dp] clock recovery failure, skip it in station\n");
+			ret = 0;
+			break;
+		}
 
 		if (ctrl->link->phy_params.v_level == DP_LINK_VOLTAGE_MAX) {
 			pr_err_ratelimited("[drm-dp] max v_level reached\n");
