@@ -41,17 +41,17 @@
 
 // saver 1
 #define LVL1_LITTLE 1804800
-#define LVL1_BIG    2054400
+#define LVL1_BIG    1958400
 #define LVL1_PRIME  2457600
 
 // saver 2
-#define LVL2_LITTLE 1516800
-#define LVL2_BIG    1670400
-#define LVL2_PRIME  1632000
+#define LVL2_LITTLE 1708800
+#define LVL2_BIG    1766400
+#define LVL2_PRIME  1747200
 
 // saver 3
-#define LVL3_LITTLE 1075200
-#define LVL3_BIG    1056000
+#define LVL3_LITTLE 1248000
+#define LVL3_BIG    1286400
 #define LVL3_PRIME  1190400
 
 static int batterysaver = 0; // 0 - 1 - 3
