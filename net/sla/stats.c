@@ -32,7 +32,6 @@
 #include <linux/debugfs.h>
 #include <linux/proc_fs.h>
 #include <linux/list.h>
-#include <linux/timekeeping.h>
 #include <net/net_namespace.h>
 #include "sla_stats.h"
 
@@ -47,6 +46,8 @@
 
 #define MMAP_FILE_NAME_SIZE 21
 #define STAT_FILE_NAME_SIZE 22
+
+#define MAC_HEADER_LENGTH 14
 
 static struct sla_config config_data;
 static u64 pkt_alloc_num = 0;
@@ -130,13 +131,14 @@ static inline void stats_unlock(void)
     spin_unlock(&stats_spin_lock);
     
 }
-
+/*
 static spinlock_t list_spin_lock;
 
 static inline void list_lock_init(void)
 {
     spin_lock_init(&list_spin_lock);
 }
+*/
 
 static inline struct hlist_head *pkt_hlist_head(u16 port)
 {
@@ -168,18 +170,14 @@ static void pkt_add(u16 port)
         return;
 
     pkt->local_port = port;
-    spin_lock(&list_spin_lock);
     ++ pkt_alloc_num;
     hlist_add_head_rcu(&pkt->hlist, pkt_hlist_head(port));
-    spin_unlock(&list_spin_lock);
 }
 
 static void pkt_release(struct uplink_pkt *pkt)
 {
-    spin_lock(&list_spin_lock);
     ++ pkt_free_num;
     hlist_del_rcu(&pkt->hlist);
-    spin_unlock(&list_spin_lock);
     kfree(pkt);
 }
 
@@ -235,7 +233,7 @@ static bool sla_pkt_valid(struct sk_buff *skb, u8 link_type)
     u16 len;
     struct tcphdr *tcph;
     struct uplink_pkt *pkt;
-
+    unsigned long flags;
 
     if(IPPROTO_TCP != ip_hdr(skb)->protocol)
         return false;
@@ -268,11 +266,13 @@ static bool sla_pkt_valid(struct sk_buff *skb, u8 link_type)
         tcph = tcp_hdr(skb);
         if(tcph->fin || tcph->rst)
         {
+	    STATS_LOCK_IRQ(&stats_spin_lock,flags);
             pkt = pkt_find(local_port);
             if(pkt)
             {
                 pkt_release(pkt);
             }
+	    STATS_UNLOCK_IRQ(&stats_spin_lock,flags);
         }
         return false;
     }
@@ -315,11 +315,12 @@ static unsigned int sla_ipv4_in(void *priv,
 {
     struct sla_interface_stats *p;
     struct sla_stats_entry *entry;
-    struct timespec64 tm;
+    struct timespec tm = current_kernel_time();
     struct uplink_pkt *pkt;
     bool consolidated = false;
     struct sla_interface* iface = NULL;
     unsigned long flags;
+    u64 timestamp = tm.tv_sec*1000 + tm.tv_nsec/1000000;
 
     if(config_data.enable && config_data.rate_on)
     {
@@ -343,12 +344,10 @@ static unsigned int sla_ipv4_in(void *priv,
         
         iface->total_trfc += skb->len;
         
-        ktime_get_coarse_real_ts64(&tm);
-        
         entry = &p->entries[p->cur_idx];
         entry->link_type = LT_DOWNLINK;
-        entry->timestamp = tm.tv_sec*1000 + tm.tv_nsec/1000000;
-        entry->size = skb->len + 14; //14 is mac len
+        entry->timestamp = timestamp;
+        entry->size = skb->len + MAC_HEADER_LENGTH; //14 is mac len
         entry->port = ntohs(tcp_hdr(skb)->dest);
 
         pkt = pkt_find(entry->port);
@@ -385,9 +384,10 @@ static unsigned int sla_ipv4_out(void *priv,
 {
     struct sla_interface_stats *p;
     struct sla_stats_entry *entry;
-    struct timespec64 tm;
+    struct timespec tm = current_kernel_time();
     struct sla_interface* iface = NULL;
     unsigned long flags;
+    u64 timestamp = tm.tv_sec*1000 + tm.tv_nsec/1000000;
 
     if(config_data.enable && config_data.rate_on)
     {
@@ -406,17 +406,14 @@ static unsigned int sla_ipv4_out(void *priv,
           
         }
         p = iface->mmap_struct;
-        
-        ktime_get_coarse_real_ts64(&tm);
 
         pkt_add(ntohs(tcp_hdr(skb)->source));
-
         
         entry = &p->entries[p->cur_idx];
         entry->link_type = LT_UPLINK;
 
-        entry->timestamp = tm.tv_sec*1000 + tm.tv_nsec/1000000;
-        entry->size = skb->len + 14; //14 is mac len
+        entry->timestamp = timestamp;
+        entry->size = skb->len + MAC_HEADER_LENGTH; //14 is mac len
         entry->port = ntohs(tcp_hdr(skb)->source);
         entry->discard = 1;
 
@@ -683,11 +680,10 @@ static void sla_stats_disable(void)
 
        kfree(iface);
     } 
+    pkt_hlist_deinit();
     STATS_UNLOCK_IRQ(&stats_spin_lock,flags);
 
     printk(KERN_CRIT "### %s out of disable funk \n", __func__);
-
-    pkt_hlist_deinit();
 }
 
 
@@ -695,6 +691,7 @@ static void sla_stats_disable(void)
 
 static void sla_stats_enable(void)
 {
+    unsigned long flags;
     if(config_data.enable)
     {
         printk("### %s enable already\n", __func__);
@@ -704,7 +701,9 @@ static void sla_stats_enable(void)
     //sla_stats_disable();
     //sla_stats_remove_file(); 
 
+    STATS_LOCK_IRQ(&stats_spin_lock,flags);
     pkt_hlist_init();
+    STATS_UNLOCK_IRQ(&stats_spin_lock,flags);
     config_data.enable = 1;
     config_data.rate_on = 1;
 }
@@ -902,6 +901,20 @@ static ssize_t config_file_write(struct file *filp, const char __user *buffer,  
     return count;
 }
 
+static int __net_init sla_nf_register(struct net *net)
+{
+	return nf_register_net_hooks(net, sla_ipv4_ops, ARRAY_SIZE(sla_ipv4_ops));
+}
+
+static void __net_exit sla_nf_unregister(struct net *net)
+{
+	nf_unregister_net_hooks(net, sla_ipv4_ops, ARRAY_SIZE(sla_ipv4_ops));
+}
+
+static struct pernet_operations sla_net_ops = {
+	.init = sla_nf_register,
+	.exit = sla_nf_unregister,
+};
 
 static const struct file_operations config_fops =
 {
@@ -919,16 +932,9 @@ static int __init sla_static_collector_init(void)
     int err = 0;
     printk("#### %s in version V 3.0 \n", __func__);
 
-    err = nf_register_net_hooks(&init_net, sla_ipv4_ops, ARRAY_SIZE(sla_ipv4_ops));
-    if (err < 0)
-    {
-        printk(KERN_ERR "%s: can't register hooks.\n", __func__);
-        return err;
-    }
+    err = register_pernet_subsys(&sla_net_ops);
 
-    list_lock_init();
     stats_lock_init();
-
 
     sla_dir = proc_mkdir("sla", NULL);
 
@@ -961,7 +967,7 @@ static int __init sla_static_collector_init(void)
 static void __exit sla_static_collector_deinit(void)
 {
     printk("#### sla_static_collector_deinit in\n");
-    nf_unregister_net_hooks(&init_net, sla_ipv4_ops, ARRAY_SIZE(sla_ipv4_ops));
+    unregister_pernet_subsys(&sla_net_ops);
 
     sla_stats_disable();
     proc_remove(sla_dir);
