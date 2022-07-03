@@ -1209,7 +1209,9 @@ static ssize_t game_settings_store(struct device *dev,
 	u8 apply_cfg[5]={0x42, 0x0, 0x0, 0x0, 0x42};
 	u32 cmd_len = 0;
 	u16 cmd_addr = 0;
-	int ret = 0;
+	int ret = 0, i = 0;
+	u32 buf_len = 11;
+	u8 buffer[11]={0x0};
 	
 	u16 touch_level[5] = {150, 140, 130, 92, 75};
 	u16 leave_level[5] = {110, 100, 100, 70, 70};
@@ -1229,8 +1231,6 @@ static ssize_t game_settings_store(struct device *dev,
 	leave_level_index = (u16)shex_to_u16(game_settings +4, 3);
 	first_filter_index = (u16)shex_to_u16(game_settings +8, 3);
 	normal_filter_index = (u16)shex_to_u16(game_settings +12, 3);
-	Rcoef = (u8)shex_to_u16(game_settings +16, 3);
-	RcoefRight = (u8)shex_to_u16(game_settings +20, 3);
 	touch_timer = (u8)shex_to_u16(game_settings +24, 3);
 	
 	ts_info("touch_level_index 0x%04X, leave_level_index 0x%04X first_filter_index 0x%04X, normal_filter_index 0x%04X",
@@ -1241,6 +1241,23 @@ static ssize_t game_settings_store(struct device *dev,
 		return -EINVAL;
 	}
 
+	cmd_addr = GOODIX_ADDR_READ_EXTERNAL_CMD;
+	mutex_lock(&goodix_modules.mutex);
+	ret = ts_dev->hw_ops->read(ts_dev, cmd_addr, buffer, buf_len);
+	if (ret) {
+		ts_info("failed read addr(%x) data %*ph\n", cmd_addr,
+			buf_len, buffer);
+	}
+	ts_info("%s read addr (%x) with data %*ph\n",
+		"success", cmd_addr, buf_len, buffer);
+	for (i = 0; i < buf_len; i++) {
+		if(i == 8)
+			Rcoef = buffer[i];
+		else if(i == 9)
+			RcoefRight = buffer[i];
+		else
+			continue;
+	}
 	game_cfg[0] = (touch_level[touch_level_index]& 0xFF00) >> 8;
 	game_cfg[1] = touch_level[touch_level_index]& 0x00FF;
 	game_cfg[2] = (leave_level[leave_level_index]& 0xFF00) >> 8;
@@ -1256,16 +1273,12 @@ static ssize_t game_settings_store(struct device *dev,
 	game_cfg[5]+game_cfg[6]+game_cfg[7]+game_cfg[8]+game_cfg[9]+game_cfg[10]);
 	game_cfg[11] = (checksum & 0xFF00) >> 8;
 	game_cfg[12] = checksum & 0x00FF;
-
-
 	ts_info("touch_level 0x%04X, leave_level 0x%04X first_filter 0x%04X, normal_filter 0x%04X",
 	touch_level[touch_level_index],leave_level[leave_level_index],first_filter[first_filter_index],normal_filter[normal_filter_index]);
 	ts_info("Rcoef 0x%02X,RcoefRight 0x%02X touch_timer 0x%02X checksum 0x%04X",Rcoef,RcoefRight,touch_timer,checksum);
 	// 1
 	cmd_addr = GOODIX_ADDR_EXTERNAL_CMD;
 	cmd_len = 13;
-	
-	mutex_lock(&goodix_modules.mutex);
 	ret = ts_dev->hw_ops->write(ts_dev, cmd_addr, game_cfg, cmd_len);
 	if (ret) {
 		ts_info("failed write addr(%x) data %*ph\n", cmd_addr,
@@ -1275,6 +1288,105 @@ static ssize_t game_settings_store(struct device *dev,
 	ts_info("%s write to addr (%x) with data %*ph\n",
 		"success", cmd_addr, cmd_len, game_cfg);
 	// 2
+	ret = ts_dev->hw_ops->write_trans(ts_dev, GOODIX_ADDR_SPECIAL_CMD,
+				     apply_cfg, 5);
+	if (ret < 0)
+		ts_info("failed GOODIX_ADDR_SPECIAL_CMD");
+	mutex_unlock(&goodix_modules.mutex);
+
+	return count;
+}
+
+static ssize_t edge_settings_show(struct device *dev,
+				     struct device_attribute *attr, char *buf)
+{
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+	struct goodix_ts_device *ts_dev = core_data->ts_dev;
+	u16 cmd_addr = GOODIX_ADDR_READ_EXTERNAL_CMD;
+	u32 buf_len = 11;
+	u8 buffer[11]={0x0};
+	int ret = 0, i = 0, offset = 0;
+
+	mutex_lock(&goodix_modules.mutex);
+	ret = ts_dev->hw_ops->read(ts_dev, cmd_addr, buffer, buf_len);
+	if (ret) {
+		ts_info("failed read addr(%x) data %*ph\n", cmd_addr,
+			buf_len, buffer);
+	}
+	mutex_unlock(&goodix_modules.mutex);
+	ts_info("%s read addr (%x) with data %*ph\n",
+		"success", cmd_addr, buf_len, buffer);
+
+	for (i = 8; i < 10; i++) {
+		offset += snprintf(&buf[offset], PAGE_SIZE - offset,
+						"%02X,", buffer[i]);
+	}
+	buf[offset++] = '\n';
+
+	return offset;
+}
+
+static ssize_t edge_settings_store(struct device *dev,
+				      struct device_attribute *attr, const char *buf, size_t count)
+{
+
+	struct goodix_ts_core *core_data = dev_get_drvdata(dev);
+	struct goodix_ts_device *ts_dev = core_data->ts_dev;
+	//struct goodix_ext_module *ext_module;
+	char edge_settings[9];
+	u16 checksum = 0x0;
+	u8 game_cfg[13]={0x0};
+	u8 apply_cfg[5]={0x42, 0x0, 0x0, 0x0, 0x42};
+	u32 cmd_len = 0;
+	u16 cmd_addr = 0;
+	int ret = 0;
+	u32 buf_len = 11;
+	u8 buffer[11]={0x0};
+	int i = 0;
+
+	memset(edge_settings, 0, sizeof(edge_settings));
+	sprintf(edge_settings, "%s", buf);
+	edge_settings[count-1] = '\0';
+	ts_info("edge_settings %s count %d ",edge_settings,count);
+
+	if(count != 8){
+		return -EINVAL;
+	}
+
+	cmd_addr = GOODIX_ADDR_READ_EXTERNAL_CMD;
+	mutex_lock(&goodix_modules.mutex);
+	ret = ts_dev->hw_ops->read(ts_dev, cmd_addr, buffer, buf_len);
+	if (ret) {
+		ts_info("failed read addr(%x) data %*ph\n", cmd_addr,
+			buf_len, buffer);
+	}
+	ts_info("%s read addr (%x) with data %*ph\n",
+		"success", cmd_addr, buf_len, buffer);
+	for (i = 0; i < buf_len; i++) {
+        if(i == 8)
+            game_cfg[i] = (u8)shex_to_u16(edge_settings +0, 3);
+        else if(i == 9)
+            game_cfg[i] = (u8)shex_to_u16(edge_settings +4, 3);
+        else
+            game_cfg[i] = buffer[i];
+        checksum = (u16)(game_cfg[0]+game_cfg[1]+game_cfg[2]+game_cfg[3]+game_cfg[4]+
+        game_cfg[5]+game_cfg[6]+game_cfg[7]+game_cfg[8]+game_cfg[9]+game_cfg[10]);
+        game_cfg[11] = (checksum & 0xFF00) >> 8;
+        game_cfg[12] = checksum & 0x00FF;
+	}
+
+	cmd_addr = GOODIX_ADDR_EXTERNAL_CMD;
+	cmd_len = 13;
+
+	ret = ts_dev->hw_ops->write(ts_dev, cmd_addr, game_cfg, cmd_len);
+	if (ret) {
+		ts_info("failed write addr(%x) data %*ph\n", cmd_addr,
+			cmd_len, game_cfg);
+	}
+
+	ts_info("%s write to addr (%x) with data %*ph\n",
+		"success", cmd_addr, cmd_len, game_cfg);
+
 	ret = ts_dev->hw_ops->write_trans(ts_dev, GOODIX_ADDR_SPECIAL_CMD,
 				     apply_cfg, 5);
 	if (ret < 0)
@@ -1822,6 +1934,7 @@ static DEVICE_ATTR(sample_rate, S_IRUGO|S_IWUSR, goodix_sample_rate_show, goodix
 static DEVICE_ATTR(rotation_type, S_IRUGO | S_IWUSR | S_IWGRP, goodix_ts_rotation_type_show, goodix_ts_rotation_type_store);
 static DEVICE_ATTR(test_keycode, S_IRUGO | S_IWUSR | S_IWGRP, goodix_ts_test_keycode_show, goodix_ts_test_keycode_store);
 static DEVICE_ATTR(game_settings, S_IRUGO | S_IWUSR | S_IWGRP, game_settings_show, game_settings_store);
+static DEVICE_ATTR(edge_settings, S_IRUGO | S_IWUSR | S_IWGRP, edge_settings_show, edge_settings_store);
 static DEVICE_ATTR(game_settings_test, S_IRUGO | S_IWUSR | S_IWGRP, game_settings_show, game_settings_test_store);
 static DEVICE_ATTR(airtrigger_touch, S_IRUGO|S_IWUSR, airtrigger_touch_show, airtrigger_touch_store);
 static DEVICE_ATTR(keymapping_touch, S_IRUGO|S_IWUSR, airtrigger_touch_show, keymapping_touch_store);
@@ -1862,6 +1975,7 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_rotation_type.attr,
 	&dev_attr_test_keycode.attr,
 	&dev_attr_game_settings.attr,
+	&dev_attr_edge_settings.attr,
 	&dev_attr_game_settings_test.attr,
 	&dev_attr_keymapping_touch.attr,
 	&dev_attr_airtrigger_touch.attr,

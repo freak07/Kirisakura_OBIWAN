@@ -83,6 +83,7 @@ enum print_reason {
 #define OVERHEAT_LIMIT_VOTER		"OVERHEAT_LIMIT_VOTER"
 #define TYPEC_SWAP_VOTER		"TYPEC_SWAP_VOTER"
 #define ASUS_DISABLE_CP_VOTER		"ASUS_DISABLE_CP_VOTER"
+#define ASUS_DISABLE_CHARGER_VOTER	"ASUS_DISABLE_CHARGER_VOTER"
 
 #define BOOST_BACK_STORM_COUNT	3
 #define WEAK_CHG_STORM_COUNT	8
@@ -546,6 +547,7 @@ struct smb_charger {
 	struct delayed_work asus_set_usb_extcon_work;
 	struct delayed_work	asus_check_vbus_work;//WA for aohai adapter
 #endif
+	struct delayed_work	safety_timer_resume_charging_work;
 	/* asus work --- */
 
 

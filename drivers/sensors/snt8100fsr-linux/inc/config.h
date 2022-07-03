@@ -80,7 +80,7 @@
 //#define SUPPORT_FLASH
 #define CONFIG_I2C_MODULE                   // (used by linux/i2c.h)
 #define SNT_FWDL_BUF_SIZE         512
-#define FIRMWARE_IRQ_TIMEOUT_MS   2000      // supports 400KHz
+#define FIRMWARE_IRQ_TIMEOUT_MS   15000      // supports 400KHz
 #define FIRMWARE_IRQ_TIMEOUT_MS_RST   2000      // supports 400KHz
 #define SNT_I2C_WRITE_DEBUG_VERBOSE
 #define SNT_I2C_READ_FIFO_PKT_DEBUG_VERBOSE

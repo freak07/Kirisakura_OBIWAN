@@ -93,6 +93,7 @@ volatile bool g_pdo_ok = false;//Add for HVDCP off
 volatile bool dual_port_once_flag = 0;
 volatile bool station_cable_flag = 0;
 bool bSkinTempOver = 0; // Add for ASUS SW INOV use
+bool b_is_MTBF_device = false;
 //ASUS BSP : Add ASUS variables ---
 
 //ASUS BSP : Add extern variables +++
@@ -166,6 +167,7 @@ extern int rt_chg_get_during_swap(void);
 extern int asus_extcon_set_state_sync(struct extcon_dev *edev, int cable_state);
 extern int asus_exclusive_vote(struct votable *votable, const char *client_str, bool enabled, int val);
 //ASUS BSP : Extern function from other driver ---
+extern char *saved_command_line;
 
 //ASUS BSP : Add ASUS interfaces +++
 int asus_request_POGO_otg_en(bool enable);
@@ -231,6 +233,17 @@ char *power_supply_status[] = {
 	"HYPER_FULL",
 	"THERMAL_ALERT",
 	"THERMAL_ALERT_CABLE_OUT"
+};
+
+char *Batt_status[] = {
+	"INHIBIT_CHARGE",
+	"TRICKLE_CHARGE",
+	"PRE_CHARGE",
+	"FULLON_CHARGE",
+	"TAPER_CHARGE",
+	"TERMINATE_CHARGE",
+	"PAUSE_CHARGE",
+	"DISABLE_CHARGE"
 };
 
 static int smblib_get_prop_typec_mode(struct smb_charger *chg);
@@ -2496,6 +2509,7 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 	}
 	stat = stat & BATTERY_CHARGER_STATUS_MASK;
 
+
 	if (!usb_online && !dc_online) {
 		switch (stat) {
 		case TERMINATE_CHARGE:
@@ -2518,29 +2532,29 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 			mutex_lock(&g_fgDev->charge_status_lock);
 			if (g_fgDev->charge_full && !gauge_get_prop) {
 				val->intval = POWER_SUPPLY_STATUS_FULL;
-				CHG_DBG("Batt_status = %s (modified)\n", power_supply_status[val->intval]);
+				CHG_DBG("Original_Batt_status= %s , Batt_status = %s (modified)\n", Batt_status[stat] , power_supply_status[val->intval]);
 			} else if (asus_get_prop_batt_capacity(smbchg_dev) == 100) {
 				val->intval = POWER_SUPPLY_STATUS_FULL;				
-				CHG_DBG("Batt_status = %s (100%%)\n", power_supply_status[val->intval]);
+				CHG_DBG("Original_Batt_status= %s , Batt_status = %s (100%%)\n", Batt_status[stat] , power_supply_status[val->intval]);
 			} else {
 				val->intval = POWER_SUPPLY_STATUS_CHARGING;
-				CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
+				CHG_DBG("Original_Batt_status= %s , Batt_status = %s\n", Batt_status[stat] , power_supply_status[val->intval]);
 			}
 			gauge_get_prop = 0;
 			mutex_unlock(&g_fgDev->charge_status_lock);
 		} else {
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;			
-			CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
+			CHG_DBG("Original_Batt_status= %s , Batt_status = %s\n", Batt_status[stat] , power_supply_status[val->intval]);
 		}
 		break;
 	case TERMINATE_CHARGE:
 	case INHIBIT_CHARGE:
 		if (asus_get_prop_batt_capacity(smbchg_dev) != 100) {
 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
-			CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
+			CHG_DBG("Original_Batt_status= %s , Batt_status = %s\n", Batt_status[stat] , power_supply_status[val->intval]);
 		} else {
 			val->intval = POWER_SUPPLY_STATUS_FULL;			
-			CHG_DBG("Batt_status = %s (100%%)\n", power_supply_status[val->intval]);
+			CHG_DBG("Original_Batt_status= %s , Batt_status = %s (100%%)\n", Batt_status[stat] , power_supply_status[val->intval]);
 		}
 		break;
 	case DISABLE_CHARGE:
@@ -2549,24 +2563,24 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 			mutex_lock(&g_fgDev->charge_status_lock);
 			if (g_fgDev->charge_full && !gauge_get_prop) {
 				val->intval = POWER_SUPPLY_STATUS_FULL;				
-				CHG_DBG("Batt_status = %s (modified)\n", power_supply_status[val->intval]);
+				CHG_DBG("Original_Batt_status= %s , Batt_status = %s (modified)\n", Batt_status[stat] , power_supply_status[val->intval]);
 			} else if (asus_get_prop_batt_capacity(smbchg_dev) == 100) {
 				val->intval = POWER_SUPPLY_STATUS_FULL;				
-				CHG_DBG("Batt_status = %s (100%%)\n", power_supply_status[val->intval]);
+				CHG_DBG("Original_Batt_status= %s , Batt_status = %s (100%%)\n", Batt_status[stat] , power_supply_status[val->intval]);
 			} else {		
 				val->intval = POWER_SUPPLY_STATUS_CHARGING;
-				CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
+				CHG_DBG("Original_Batt_status= %s , Batt_status = %s\n", Batt_status[stat] , power_supply_status[val->intval]);
 			}
 			gauge_get_prop = 0;
 			mutex_unlock(&g_fgDev->charge_status_lock);
 		} else {
 			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
-			CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
+			CHG_DBG("Original_Batt_status= %s , Batt_status = %s\n", Batt_status[stat] , power_supply_status[val->intval]);
 		}
 		break;
 	default:
 		val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
-		CHG_DBG("Batt_status = %s\n", power_supply_status[val->intval]);
+		CHG_DBG("Original_Batt_status= %s , Batt_status = %s\n", Batt_status[stat] , power_supply_status[val->intval]);
 		break;
 	}
 #ifdef CONFIG_UCI_NOTIFICATIONS
@@ -2676,25 +2690,29 @@ int smblib_get_prop_batt_health(struct smb_charger *chg,
 		rc = smblib_get_prop_from_bms(chg,
 				POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
 		if (!rc) {
-#if 0
 			/*
 			 * If Vbatt is within 40mV above Vfloat, then don't
 			 * treat it as overvoltage.
 			 */
 			effective_fv_uv = get_effective_result_locked(
 							chg->fv_votable);
+			if(effective_fv_uv == 4080000)
+			{
+				if(pval.intval >= 4380000)
+				{
+					val->intval = POWER_SUPPLY_HEALTH_OVERVOLTAGE;
+					smblib_err(chg, "battery over-voltage vbat_fg = %duV, fv = %duV\n",
+					pval.intval, effective_fv_uv);
+					goto done;
+				}
+			}
+			else
 			if (pval.intval >= effective_fv_uv + 40000) {
 				val->intval = POWER_SUPPLY_HEALTH_OVERVOLTAGE;
 				smblib_err(chg, "battery over-voltage vbat_fg = %duV, fv = %duV\n",
 						pval.intval, effective_fv_uv);
 				goto done;
 			}
-#else
-			val->intval = POWER_SUPPLY_HEALTH_OVERVOLTAGE;
-			smblib_err(chg, "battery over-voltage vbat_fg = %duV, fv = %duV\n",
-					pval.intval, effective_fv_uv);
-			goto done;
-#endif
 		}
 	}
 
@@ -5895,6 +5913,17 @@ bool is_INOV_triggered(void)
 }
 //ASUS_BSP LiJen implement the asus owns algorithm of detection full capacity ---
 
+void dump_pmic_regs(void)
+{
+	u8 stat;
+	int i;
+
+	for(i = 0 ; i < 0x800 ; i++) {
+		smblib_read(smbchg_dev, CHGR_BASE+i, &stat);
+		smblib_err(smbchg_dev, "address 0x%X: %02X\n", CHGR_BASE+i, stat);
+	}
+}
+
 /************************
  * ASUS CHARGER FLOW *
  ************************/
@@ -5938,6 +5967,7 @@ void asus_typec_removal_function(struct smb_charger *chg)
 	cancel_delayed_work(&chg->asus_set_usb_extcon_work);
 	cancel_delayed_work(&chg->asus_write_mux_setting_3);
 	cancel_delayed_work(&chg->asus_check_vbus_work);//WA for aohai adapter
+	cancel_delayed_work(&chg->safety_timer_resume_charging_work);
 	//ASUS BSP : Add for battery health upgrade +++
 
 	if (g_fgDev != NULL) {
@@ -6407,6 +6437,9 @@ bool jeita_rule(void)
 	int FV_uV;
 	int FCC_uA;
 	//int skin_temp;
+	union power_supply_propval input_current_val, charging_status_val;
+	u8 reg_data;
+	static bool b_dump_pmic_regs = true;
 
 	if (g_PanelOnOff) {
 		CHG_DBG("Set PMIC INOV to Panel On\n");
@@ -6451,8 +6484,40 @@ bool jeita_rule(void)
 	bat_capacity = asus_get_prop_batt_capacity(smbchg_dev);
 	state = smbchg_jeita_judge_state(state, bat_temp);
 	//skin_temp = get_skin_temp();
-	CHG_DBG("batt_health = %s, temp = %d, volt = %d, ICL = 0x%x, ICL_Result = 0x%x\n",
-		health_type[bat_health], bat_temp, bat_volt, ICL_reg, ICL_Result);
+	rc = smblib_get_prop_usb_current_now(smbchg_dev, &input_current_val);
+	rc = smblib_get_prop_batt_status(smbchg_dev, &charging_status_val);
+
+	CHG_DBG("batt_health = %s, temp = %d, volt = %d, ICL = 0x%x, ICL_Result = 0x%x, InputCurrentNow = %d\n",
+		health_type[bat_health], bat_temp, bat_volt, ICL_reg, ICL_Result, input_current_val.intval);
+
+	if(b_is_MTBF_device == true && bat_capacity < 90 && charging_status_val.intval == POWER_SUPPLY_STATUS_CHARGING && input_current_val.intval <= 400000) {
+		CHG_DBG("InputCurrentNow = %d is too small, rerun AICL and stop charging then restart charging\n", input_current_val.intval);
+		if(b_dump_pmic_regs == true) {
+			dump_pmic_regs();
+			b_dump_pmic_regs = false;
+		}
+		rc = smblib_masked_write(smbchg_dev, USBIN_AICL_OPTIONS_CFG_REG, USBIN_AICL_EN_BIT, 0);
+		if (rc < 0)
+			CHG_DBG_E("Failed to set USBIN_AICL_EN_BIT = 0\n");
+		msleep(5);
+		rc = smblib_masked_write(smbchg_dev, USBIN_AICL_OPTIONS_CFG_REG, USBIN_AICL_EN_BIT, USBIN_AICL_EN_BIT);
+		if (rc < 0)
+			CHG_DBG_E("Failed to set USBIN_AICL_EN_BIT = 1\n");
+
+		vote(smbchg_dev->chg_disable_votable, ASUS_DISABLE_CHARGER_VOTER, true, 0);
+		rc = smblib_write(smbchg_dev, CHARGING_ENABLE_CMD_REG, 0);
+		if (rc < 0) {
+			smblib_err(smbchg_dev, "Couldn't write 0 to CHARGING_ENABLE_CMD_REG rc=%d\n", rc);
+		}
+		rc = smblib_read(smbchg_dev, CHARGING_ENABLE_CMD_REG, &reg_data);
+		pr_info_ratelimited("CHARGING_ENABLE_CMD_REG: 0x%X\n", reg_data);
+		if (reg_data != 0) {
+			smblib_err(smbchg_dev, "Failed to write 0 to CHARGING_ENABLE_CMD_REG rc=%d\n", rc);
+		} else {
+			pr_info_ratelimited("charging disabled\n");
+		}
+		schedule_delayed_work(&smbchg_dev->safety_timer_resume_charging_work, msecs_to_jiffies(10000));
+	}
 
 	switch (state) {
 	case JEITA_STATE_LESS_THAN_0:
@@ -6581,7 +6646,10 @@ void monitor_charging_enable(u8 jeita_charging_enable)
 			feature_stop_chg_flag = true;
 		} else if (bat_capacity >= (60 - demo_recharge_delta)) {
 			smblib_set_usb_suspend(smbchg_dev, false);
-			feature_stop_chg_flag = true;
+			if (bat_capacity < 60 && ultra_bat_life_flag ==1)
+				feature_stop_chg_flag = false;
+			else
+				feature_stop_chg_flag = true;
 		} else {
 			smblib_set_usb_suspend(smbchg_dev, false);
 			feature_stop_chg_flag = false;
@@ -8127,6 +8195,8 @@ irqreturn_t default_irq_handler(int irq, void *data)
 	struct smb_charger *chg = irq_data->parent_data;
 	const struct apsd_result *apsd_result;	//ASUS BSP +++
 	int rc;
+	u8 reg_data;
+	u8 stat;
 
 	smblib_dbg(chg, PR_INTERRUPT, "IRQ: %s\n", irq_data->name);
 // ASUS BSP : Add for HUAWEI 22W adapter misdetect to QC2 +++
@@ -8152,6 +8222,53 @@ irqreturn_t default_irq_handler(int irq, void *data)
 		}
 	}
 // ASUS BSP : Add for HUAWEI 22W adapter misdetect to QC2 ---
+	if (!strcmp(irq_data->name, "usbin-collapse") && b_is_MTBF_device == true) {
+		apsd_result = smblib_get_apsd_result(smbchg_dev);
+		if (strncmp(apsd_result->name, "OCP", 3) == 0 || strncmp(apsd_result->name, "CDP", 3) == 0) {
+			CHG_DBG("usbin-collapse and charger type %s so trigger smblib_rerun_apsd\n", apsd_result->name);
+			//Recovery USBIN collapse
+			rc = smblib_masked_write(smbchg_dev, USBIN_AICL_OPTIONS_CFG_REG,
+				SUSPEND_ON_COLLAPSE_USBIN_BIT, 0);
+			if (rc < 0)
+				smblib_err(smbchg_dev, "Couldn't turn off SUSPEND_ON_COLLAPSE_USBIN_BIT rc=%d\n", rc);
+
+			//Rerun APSD to restart the charging
+			smblib_rerun_apsd(smbchg_dev);
+		}
+	}
+	if (!strcmp(irq_data->name, "chgr-error")) {
+		rc = smblib_read(chg, BATTERY_CHARGER_STATUS_2_REG, &stat);
+		if (rc < 0) {
+			smblib_err(chg, "Couldn't read BATTERY_CHARGER_STATUS_2 rc=%d\n",
+				rc);
+			return IRQ_HANDLED;
+		}
+
+		if (stat & CHARGER_ERROR_STATUS_SFT_EXPIRE_BIT) {
+			pr_info_ratelimited("IRQ: %s: Safety Timer Expired\n", irq_data->name);
+			if (b_is_MTBF_device == true)
+			{
+				vote(chg->chg_disable_votable, ASUS_DISABLE_CHARGER_VOTER, true, 0);
+				rc = smblib_write(chg, CHARGING_ENABLE_CMD_REG, 0);
+				if (rc < 0) {
+					smblib_err(chg, "Couldn't write 0 to CHARGING_ENABLE_CMD_REG rc=%d\n", rc);
+				}
+
+				rc = smblib_read(chg, CHARGING_ENABLE_CMD_REG, &reg_data);
+				pr_info_ratelimited("CHARGING_ENABLE_CMD_REG: 0x%X\n", reg_data);
+				if (reg_data != 0) {
+					smblib_err(chg, "Failed to write 0 to CHARGING_ENABLE_CMD_REG rc=%d\n", rc);
+				} else {
+					pr_info_ratelimited("charging disabled\n");
+				}
+				schedule_delayed_work(&chg->safety_timer_resume_charging_work, msecs_to_jiffies(10000));
+			}
+		}
+		if (stat & CHARGER_ERROR_STATUS_BAT_OV_BIT)
+			pr_info_ratelimited("IRQ: %s: Battery Overvoltage\n", irq_data->name);
+		if (stat & CHARGER_ERROR_STATUS_BAT_MISSING_BIT)
+			pr_info_ratelimited("IRQ: %s: Battery Missing\n", irq_data->name);
+	}
 	return IRQ_HANDLED;
 }
 
@@ -11436,6 +11553,29 @@ relax:
 	pm_relax(chg->dev);
 }
 
+static void safety_timer_resume_charging_work(struct work_struct *work)
+{
+	struct delayed_work *delayed_work = to_delayed_work(work);
+	struct smb_charger *chg = container_of(delayed_work, struct smb_charger,
+							safety_timer_resume_charging_work);
+	int rc;
+	u8 reg_data;
+
+	vote(chg->chg_disable_votable, ASUS_DISABLE_CHARGER_VOTER, false, 0);
+	rc = smblib_write(chg, CHARGING_ENABLE_CMD_REG, 1);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't write 1 to CHARGING_ENABLE_CMD_REG rc=%d\n", rc);
+	}
+
+	rc = smblib_read(chg, CHARGING_ENABLE_CMD_REG, &reg_data);
+	pr_info_ratelimited("CHARGING_ENABLE_CMD_REG: 0x%X\n", reg_data);
+	if (reg_data != 0) {
+		smblib_err(chg, "Failed to write 1 to CHARGING_ENABLE_CMD_REG rc=%d\n", rc);
+	} else {
+		pr_info_ratelimited("charging enabled\n");
+	}
+}
+
 static int smblib_create_votables(struct smb_charger *chg)
 {
 	int rc = 0;
@@ -11647,7 +11787,24 @@ int smblib_init(struct smb_charger *chg)
 	INIT_DELAYED_WORK(&chg->asus_set_usb_extcon_work, asus_set_usb_extcon_work);
 	INIT_DELAYED_WORK(&chg->asus_check_vbus_work, asus_check_vbus_work);// WA for aohai adapter
 	alarm_init(&bat_alarm, ALARM_REALTIME, batAlarm_handler);
+	INIT_DELAYED_WORK(&chg->safety_timer_resume_charging_work, safety_timer_resume_charging_work);
 	//ASUS BSP : Add the work ---
+
+	if (strstr(saved_command_line, "androidboot.serialno=L6AIBP000066MDG")
+		|| strstr(saved_command_line, "androidboot.serialno=LAAIKN059517899")
+		|| strstr(saved_command_line, "androidboot.serialno=L4AIBP000613CS7")
+		|| strstr(saved_command_line, "androidboot.serialno=L3AIGF000356YP9")
+		|| strstr(saved_command_line, "androidboot.serialno=LAAIKN059547HLV")
+		|| strstr(saved_command_line, "androidboot.serialno=LAAIKN059535XCH")
+		|| strstr(saved_command_line, "androidboot.serialno=LAAIKN059541DMH")
+		|| strstr(saved_command_line, "androidboot.serialno=L6AIKNN500306L2")
+		|| strstr(saved_command_line, "androidboot.serialno=L6AIBP000310YGP")
+		|| strstr(saved_command_line, "androidboot.serialno=L8AIKN05J091ZU6")
+		|| strstr(saved_command_line, "androidboot.serialno=L6AIKNN50033XFP")
+		|| strstr(saved_command_line, "androidboot.serialno=L8AIKN05B977GAB")) {
+		CHG_DBG("MTBF device matched");
+		b_is_MTBF_device = true;
+	}
 
 	timer_setup(&chg->apsd_timer, apsd_timer_cb, 0);
 

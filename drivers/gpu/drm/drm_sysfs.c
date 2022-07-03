@@ -190,6 +190,25 @@ static ssize_t fod_touched_store(struct class *class,
 	return count;
 }
 static CLASS_ATTR_RW(fod_touched);
+
+extern void asus_dp_change_state(bool mode, int type);
+static ssize_t dp_connect_store(struct class *class,
+					struct class_attribute *attr,
+					const char *buf, size_t count)
+{
+	int ret = 0;
+
+	if (!count)
+		return -EINVAL;
+
+	if (sysfs_streq(buf, "0"))
+		asus_dp_change_state(0, 4);
+	else
+		ret = -EINVAL;
+
+	return ret ? ret : count;
+}
+static CLASS_ATTR_WO(dp_connect);
 #endif
 /* ASUS BSP Display, add for Hdr mode --- */
 
@@ -262,6 +281,14 @@ int drm_sysfs_init(void)
 	err = class_create_file(drm_class, &class_attr_fod_touched);
 	if (err) {
 		printk("[Display] Fail to create fod_touched file node\n");
+		class_destroy(drm_class);
+		drm_class = NULL;
+		return err;
+	}
+
+	err = class_create_file(drm_class, &class_attr_dp_connect);
+	if (err) {
+		printk("[Display] Fail to create dp_connect file node\n");
 		class_destroy(drm_class);
 		drm_class = NULL;
 		return err;

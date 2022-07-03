@@ -2387,6 +2387,18 @@ static void announce_device(struct usb_device *udev)
 	}
 //ASUS Lotta_Lu add for ene6k7750 force update -----
 
+//[SWAS5-1049] To avoid deference NULL pointer +++++
+	if(!udev) {
+		printk("usb_device dev is NULL\n");
+		return;
+	}
+
+	if(!udev->bus) {
+		printk("usb_device bus is NULL\n");
+		return;
+	}
+//[SWAS5-1049] To avoid deference NULL pointer -----
+
 	if (le16_to_cpu(udev->descriptor.idVendor)==0x048D && le16_to_cpu(udev->descriptor.idProduct)==0x5212 //Station billboard
 	){
 		dev_info(&udev->dev, "[USB] DT/Station Billboard enable autosuspend\n");
