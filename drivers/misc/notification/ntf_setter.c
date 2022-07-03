@@ -49,7 +49,7 @@ int notification_booster_overdrive_perc = 0;
 bool boost_only_in_pocket = false;
 bool in_pocket = false;
 
-extern void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
+//extern void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
 
 void set_led_charge_colors(int level, bool blink) {
 	if (rgb_batt_colored) {
@@ -182,17 +182,7 @@ static void ntf_listener(char* event, int num_param, char* str_param) {
 			}
 		}
 	}
-	if (!strcmp(event,NTF_EVENT_SLEEP)) {
-		uci_vibration_set_in_pocket( (!ntf_is_screen_on() && boost_only_in_pocket)?notification_booster_overdrive_perc:0, boost_only_in_pocket?in_pocket:false);
-	}
-	if (!strcmp(event,NTF_EVENT_PROXIMITY)) { // proximity
-		if (!!num_param) {
-			in_pocket = true;
-		} else{
-			in_pocket = false;
-		}
-		uci_vibration_set_in_pocket( (!ntf_is_screen_on() && boost_only_in_pocket)?notification_booster_overdrive_perc:0, (boost_only_in_pocket&&!ntf_is_screen_on())?in_pocket:false);
-	}
+
 }
 #endif
 
@@ -209,7 +199,7 @@ static void uci_user_listener(void) {
 
 	notification_booster_overdrive_perc = uci_get_user_property_int_mm("notification_booster_overdrive_perc", 10, 0, 40);
 	boost_only_in_pocket = !!uci_get_user_property_int_mm("boost_only_in_pocket", 0, 0, 1);
-	uci_vibration_set_in_pocket( (!ntf_is_screen_on() && boost_only_in_pocket)?notification_booster_overdrive_perc:0, (boost_only_in_pocket&&!ntf_is_screen_on())?in_pocket:false);
+	//uci_vibration_set_in_pocket( (!ntf_is_screen_on() && boost_only_in_pocket)?notification_booster_overdrive_perc:0, (boost_only_in_pocket&&!ntf_is_screen_on())?in_pocket:false);
 
 }
 

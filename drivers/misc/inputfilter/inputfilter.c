@@ -51,9 +51,9 @@ MODULE_LICENSE("GPL");
 #define IFILTER_KEY_APPSWITCH 1
 #define IFILTER_KEY_NOTIFICATION 2
 
-extern void set_vibrate(int value);
-extern void set_vibrate_2(int value, int boost_level);
-extern void set_vibrate_boosted(int value);
+//extern void set_vibrate(int value);
+//extern void set_vibrate_2(int value, int boost_level);
+//extern void set_vibrate_boosted(int value);
 
 static const int ifilter_switch = IFILTER_SWITCH_STOCK;
 static const int ifilter_key = 0;
@@ -254,7 +254,7 @@ static struct alarm vibrate_rtc;
 static enum alarmtimer_restart vibrate_rtc_callback(struct alarm *al, ktime_t now)
 {
 	pr_info("%s kad\n",__func__);
-	set_vibrate_boosted(998);
+//	set_vibrate_boosted(998);
 	return ALARMTIMER_NORESTART;
 }
 
@@ -300,7 +300,7 @@ void ifilter_uci_sys_listener(void) {
 //			    (2 * 1000LL * 1000LL)); // msec to usec
 			alarm_cancel(&vibrate_rtc);
 			alarm_start_relative(&vibrate_rtc, ms_to_ktime(2 * 1000)); // start new...
-			set_vibrate_boosted(999);
+	//		set_vibrate_boosted(999);
 		} else {
 			if (!ringing) {
 				alarm_cancel(&vibrate_rtc);
@@ -810,7 +810,7 @@ static DECLARE_DELAYED_WORK(ifilter_presspwr_work, ifilter_presspwr);
 
 static void ifilter_vib(void) {
 	// avoid using squeeze vib length 15...
-	set_vibrate(get_vib_strength()==15?14:get_vib_strength());
+	//set_vibrate(get_vib_strength()==15?14:get_vib_strength());
 }
 static void ifilter_vib_work_func(struct work_struct * ifilter_vib_work) {
 	ifilter_vib();
@@ -1393,7 +1393,7 @@ void register_squeeze_power_threshold_change(int power) {
 EXPORT_SYMBOL(register_squeeze_power_threshold_change);
 
 static void squeeze_vib(void) {
-	set_vibrate_2(15,5); // a bit weaker click on pixel4
+	//set_vibrate_2(15,5); // a bit weaker click on pixel4
 }
 
 
@@ -1443,7 +1443,7 @@ static void swipe_longcount(struct work_struct * swipe_longcount_work) {
 			swipe_longcount_finished = 1;
 			if (get_squeeze_swipe_vibration() && screen_on && get_squeeze_sleep()) {
 				//set_vibrate(20);
-				set_vibrate(25); // clickety vibration special value on u12+
+				//set_vibrate(25); // clickety vibration special value on u12+
 			}
 			return;
 		}
@@ -2897,7 +2897,7 @@ skip_ts:
 								pr_info("%s kad first_one done == 1 DOUBLE TAP, interrupt kad and vibrate \n",__func__);
 								interrupt_kad_peekmode_wait = 1; // signal interruption for kad squeeze_peekmode work...
 								ntf_input_event(__func__,""); // stop flashlight...
-								set_vibrate(20); 
+								//set_vibrate(20); 
 							} 
 #if 0
 							else {

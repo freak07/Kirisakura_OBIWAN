@@ -772,14 +772,14 @@ EXPORT_SYMBOL(ntf_led_back_release_charge);
 
 #ifdef EMPTY_CALLBACKS_VIB
 // vib
-void set_vibrate_boosted(int num) {}
-EXPORT_SYMBOL(set_vibrate_boosted);
-void set_vibrate(int num) {}
-EXPORT_SYMBOL(set_vibrate);
-void set_vibrate_2(int num, int boost_level) {}
-EXPORT_SYMBOL(set_vibrate_2);
-void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
-EXPORT_SYMBOL(uci_vibration_set_in_pocket);
+//void set_vibrate_boosted(int num) {}
+//EXPORT_SYMBOL(set_vibrate_boosted);
+//void set_vibrate(int num) {}
+//EXPORT_SYMBOL(set_vibrate);
+//void set_vibrate_2(int num, int boost_level) {}
+//EXPORT_SYMBOL(set_vibrate_2);
+//void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
+//EXPORT_SYMBOL(uci_vibration_set_in_pocket);
 #endif
 
 #ifdef EMPTY_CALLBACKS_KCAL
