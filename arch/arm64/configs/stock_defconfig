@@ -5535,7 +5535,8 @@ CONFIG_QCOM_KGSL_IOMMU=y
 #
 # TouchSense driver support
 #
-CONFIG_TSPDRV_AW8697=y
+CONFIG_AW8697_HAPTIC=y
+#CONFIG_TSPDRV_AW8697=y
 
 #
 # tuxera user/userdebug control
