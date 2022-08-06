@@ -28,6 +28,7 @@
 // comment these when callbacks implemented in drivers
 //#define EMPTY_CALLBACKS_TORCH
 //#define EMPTY_CALLBACKS_VIB
+//#define EMPTY_CALLBACKS_VIB_HAPTIC
 #define EMPTY_CALLBACKS_KCAL
 //#define EMPTY_CALLBACKS_LED_FRONT
 #define EMPTY_CALLBACKS_LED_BACK
@@ -63,6 +64,9 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESCRIPTION);
 MODULE_VERSION(DRIVER_VERSION);
 MODULE_LICENSE("GPL");
+
+
+
 
 #if defined(CONFIG_FB) || defined(CONFIG_DRM)
 struct notifier_block *uci_fb_notifier;
@@ -796,8 +800,12 @@ void set_vibrate(int num) {}
 EXPORT_SYMBOL(set_vibrate);
 void set_vibrate_2(int num, int boost_level) {}
 EXPORT_SYMBOL(set_vibrate_2);
-void uci_vibration_set_in_pocket(int percentage, bool in_pocket);
-EXPORT_SYMBOL(uci_vibration_set_in_pocket);
+void ntf_vibration_set_in_pocket(int percentage, bool in_pocket) {}
+EXPORT_SYMBOL(ntf_vibration_set_in_pocket);
+#endif
+#ifdef EMPTY_CALLBACKS_VIB_HAPTIC
+void ntf_vibration_set_haptic(int power) {}
+EXPORT_SYMBOL(ntf_vibration_set_haptic);
 #endif
 
 #ifdef EMPTY_CALLBACKS_KCAL
