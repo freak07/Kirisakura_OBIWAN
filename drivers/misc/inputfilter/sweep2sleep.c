@@ -84,7 +84,7 @@ static DEFINE_MUTEX(longtapworklock);
 static struct workqueue_struct *s2s_input_wq;
 static struct work_struct s2s_input_work;
 //extern void set_vibrate(int value);
-//extern void set_vibrate_2(int value, int boost_power);
+extern void set_vibrate_2(int value, int boost_power);
 static int vib_strength = VIB_STRENGTH;
 static bool first_event = false;
 static bool setup_done = false;
@@ -235,7 +235,7 @@ static void sweep2sleep_presspwr(struct work_struct * sweep2sleep_presspwr_work)
                 return;
 
 	if (!check_no_finger(100)) {
-	//	set_vibrate_2(10,60);
+		set_vibrate_2(10,60);
 		screen_off_after_gesture = true;
 		goto exit_mutex;
 	}
@@ -248,7 +248,7 @@ static void sweep2sleep_presspwr(struct work_struct * sweep2sleep_presspwr_work)
 	pause_before_pwr_off = false;
 
 	if (!check_no_finger(1)) {
-	//	set_vibrate_2(10,60);
+		set_vibrate_2(10,60);
 		screen_off_after_gesture = true;
 		goto exit_mutex;
 	}
@@ -268,7 +268,7 @@ static DECLARE_WORK(sweep2sleep_presspwr_work, sweep2sleep_presspwr);
 
 static int vib_power = 50;
 static void sweep2sleep_vib(struct work_struct * sweep2sleep_vib_work) {
-//	set_vibrate_2(vib_strength-10,vib_power);
+	set_vibrate_2(vib_strength-10,vib_power);
 	return;
 }
 static DECLARE_WORK(sweep2sleep_vib_work, sweep2sleep_vib);

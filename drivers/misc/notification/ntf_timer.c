@@ -583,11 +583,11 @@ static void flash_blink_work_func(struct work_struct *work)
 }
 
 //extern void set_vibrate(int value);
-//extern void set_vibrate_boosted(int value);
+extern void set_vibrate_boosted(int value);
 static void vib_work_func(struct work_struct *vib_work_func_work)
 {
 	pr_info("%s set_vibrate boosted\n",__func__);
-//	set_vibrate_boosted(uci_get_vib_notification_length());
+	set_vibrate_boosted(uci_get_vib_notification_length());
 }
 static DECLARE_WORK(vib_work_func_work, vib_work_func);
 
